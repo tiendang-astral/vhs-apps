@@ -1,0 +1,16 @@
+CÀI ĐẶT TRÊN WINDOWS SERVER (103.176.179.125)
+1. Cài Python 3.11+ từ python.org, TICK "Add python.exe to PATH".
+2. Giải nén vhs-loans.zip vào C:\vhs-loans
+3. Mở chay_lan_dau.bat bằng Notepad, đổi 2 mật khẩu (≥ 8 ký tự), lưu, bấm đúp để chạy.
+   Khi thấy "Serving on http://0.0.0.0:8000" là chạy được. Sau đó XÓA 2 dòng "set ...PASSWORD" trong file.
+4. Mở cổng (PowerShell quyền Administrator):
+   netsh advfirewall firewall add rule name="VHS Loans" dir=in action=allow protocol=TCP localport=8000
+   Nếu server là VPS/cloud: mở thêm cổng 8000 trong Security Group/Firewall của nhà cung cấp.
+5. Thử: http://103.176.179.125:8000
+6. Chạy tự động khi khởi động lại: Task Scheduler > Create Task > Run whether user is logged on or not
+   > Trigger "At startup" > Action chạy C:\vhs-loans\chay.bat > Start in: C:\vhs-loans
+7. Sao lưu hằng ngày thư mục C:\vhs-loans\data (chứa loans.db).
+BẢO MẬT KHI TRUY CẬP TỪ INTERNET (rất nên làm)
+- Dùng tên miền + HTTPS (ví dụ Caddy hoặc IIS), sau đó đặt biến HTTPS=1 trước khi chạy.
+  Chỉ có IP thì mật khẩu đi trên mạng dạng không mã hóa.
+- Nếu chưa có HTTPS: giới hạn cổng 8000 chỉ cho IP văn phòng/VPN của công ty trong Windows Firewall.

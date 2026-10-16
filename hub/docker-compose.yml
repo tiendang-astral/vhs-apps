@@ -1,0 +1,12 @@
+# Sửa danh sách app trong .env rồi chạy: docker compose up -d
+services:
+  hub:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PORT:-10079}:80"
+    env_file: ${ENV_FILE:-.env}
+    volumes:
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+    # Gom các biến APP_1, APP_2, ... (theo thứ tự số) thành apps.txt rồi chạy nginx
+    command: sh -c "env | grep -E '^APP_[0-9]+=' | sort -t_ -k2 -n | cut -d= -f2- > /usr/share/nginx/html/apps.txt && exec nginx -g 'daemon off;'"

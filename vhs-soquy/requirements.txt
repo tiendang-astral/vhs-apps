@@ -1,0 +1,6 @@
+starlette>=0.40
+uvicorn[standard]>=0.30
+PyJWT>=2.8
+psycopg[binary]>=3.1
+openpyxl>=3.1      # biểu mẫu / nhập Excel
+requests>=2.31   # chỉ dùng cho tests/test_flow.py

@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${PORT:-10081}:8000"
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      KETOAN_PASSWORD: ${KETOAN_PASSWORD:-}
+      HTTPS: ${HTTPS:-0}
+      HUB_URL: ${HUB_URL:-}
+    volumes:
+      - ./data:/app/data

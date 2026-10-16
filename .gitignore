@@ -1,0 +1,21 @@
+# Bí mật — chỉ giữ file mẫu
+.env
+.env.*
+!.env.example
+
+# Dữ liệu runtime
+data/
+*.db
+*.db-*
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

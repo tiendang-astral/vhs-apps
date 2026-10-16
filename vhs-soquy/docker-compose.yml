@@ -1,0 +1,39 @@
+# Chạy:  cp .env.example .env  (sửa mật khẩu)  →  docker compose up -d --build
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: soquy
+      POSTGRES_USER: soquy
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U soquy -d soquy"]
+      interval: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://soquy:${POSTGRES_PASSWORD}@db:5432/soquy
+      SECRET_KEY: ${SECRET_KEY}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      APP_NAME: ${APP_NAME:-QUẢN TRỊ TÀI CHÍNH TIMORI GROUP}
+      ADMIN_FULLNAME: ${ADMIN_FULLNAME:-Admin tập đoàn}
+      SEED_LEGACY: ${SEED_LEGACY:-1}
+      TOKEN_HOURS: ${TOKEN_HOURS:-12}
+      HUB_URL: ${HUB_URL:-}
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "${APP_PORT:-8000}:8000"
+
+volumes:
+  pgdata:
