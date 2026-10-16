@@ -1,6 +1,6 @@
 #!/bin/sh
 # Tắt hub + 2 app trên máy này. Dữ liệu giữ nguyên:
-#   vhs-loans → vhs-loans/data/loans.db (bind mount trên host)
+#   vhs-loans → volume vhs-loans-data (tên cố định, không phụ thuộc thư mục)
 #   vhs-soquy → volume pgdata (docker compose down KHÔNG xoá volume)
 # Muốn xoá luôn cả dữ liệu: docker compose down -v trong từng thư mục app.
 set -e

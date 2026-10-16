@@ -10,4 +10,9 @@ services:
       HTTPS: ${HTTPS:-0}
       HUB_URL: ${HUB_URL:-}
     volumes:
-      - ./data:/app/data
+      - loans-data:/app/data
+
+# Tên cố định → chạy compose ở thư mục nào cũng dùng chung dữ liệu
+volumes:
+  loans-data:
+    name: vhs-loans-data
