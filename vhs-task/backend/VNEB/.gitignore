@@ -1,0 +1,8 @@
+# File chứa mật khẩu / khóa bí mật
+appsettings.Local.json
+appsettings.*.Local.json
+
+# Build output
+bin/
+obj/
+.vs/

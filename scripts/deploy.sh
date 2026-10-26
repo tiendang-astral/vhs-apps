@@ -4,7 +4,7 @@
 set -e
 cd "$(dirname "$0")/.."
 
-for d in vhs-soquy vhs-loans hub; do
+for d in vhs-soquy vhs-loans vhs-task hub; do
   echo "== $d"
   if [ "$1" = down ]; then
     (cd "$d" && docker compose down)

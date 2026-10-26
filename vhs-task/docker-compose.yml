@@ -1,0 +1,33 @@
+# Prod: ./scripts/deploy.sh (.env)   Dev: docker compose --env-file .env.dev up -d --build
+# Web nginx chuyển /api, /uploads, /notificationHub sang api → chỉ cần 1 domain.
+# CSDL: dùng SQL Server có sẵn (ManagementDB) — compose KHÔNG tạo DB mới.
+services:
+  api:
+    build: ./backend/VNEB
+    restart: unless-stopped
+    environment:
+      ConnectionStrings__SEP490_G49: ${DB_CONNECTION}
+      JWT__Secret: ${JWT_SECRET}
+      Cors__AllowedOrigins__0: ${FRONTEND_URL:-}
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - uploads:/app/wwwroot/uploads
+    ports:
+      - "127.0.0.1:${API_PORT:-10084}:8080"   # chỉ để debug trên máy; bên ngoài đi qua web
+
+  web:
+    build:
+      context: ./frontend/my-app
+      args:
+        REACT_APP_API_URL: ${API_URL:-http://localhost:10083}
+    restart: unless-stopped
+    environment:
+      HUB_URL: ${HUB_URL:-}   # trống = ẩn nút về hub
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-10083}:80"
+
+volumes:
+  # Avatar + hợp đồng lao động. Cần backup cùng với DB.
+  uploads:

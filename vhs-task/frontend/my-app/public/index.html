@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="Hệ thống Quản trị Doanh nghiệp VNEB - VHS"
+    />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <!--
+      manifest.json provides metadata used when your web app is installed on a
+      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
+    -->
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <!--
+      Notice the use of %PUBLIC_URL% in the tags above.
+      It will be replaced with the URL of the `public` folder during the build.
+      Only files inside the `public` folder can be referenced from the HTML.
+
+      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
+      work correctly both with client-side routing and a non-root public URL.
+      Learn how to configure a non-root public URL by running `npm run build`.
+    -->
+    <title>Hệ thống ERP</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+
+    <!-- Nút nổi về hub. __HUB_URL__ được thay lúc container khởi động (HUB_URL trống = ẩn) -->
+    <a id="hub-fab" href="__HUB_URL__" title="Về trang chủ" aria-label="Về trang chủ"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></a>
+    <dialog id="hub-dlg" aria-labelledby="hub-dlg-t"><div>
+      <h3 id="hub-dlg-t">Quay về trang chủ?</h3>
+      <p>Bạn sẽ rời ứng dụng này và quay về trang danh sách ứng dụng.</p>
+      <form method="dialog"><button value="">Ở lại</button><button value="go" autofocus>Quay về</button></form>
+    </div></dialog>
+    <style>
+      #hub-fab{position:fixed;right:20px;bottom:20px;z-index:90;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:var(--p,#2563eb);color:#fff;box-shadow:0 6px 20px #0003;transition:transform .15s}
+      #hub-fab:hover{transform:scale(1.07)}
+      #hub-fab:focus-visible{outline:3px solid var(--p,#2563eb);outline-offset:3px}
+      #hub-dlg{border:0;border-radius:14px;padding:0;width:min(360px,calc(100vw - 32px));box-shadow:0 20px 50px #0004;font:inherit;color:inherit}
+      #hub-dlg::backdrop{background:#0007}
+      #hub-dlg>div{padding:22px}
+      #hub-dlg h3{margin:0 0 6px;font-size:17px;font-weight:700}
+      #hub-dlg p{margin:0 0 18px;color:#5b6475;font-size:14px;line-height:1.5}
+      #hub-dlg form{display:flex;justify-content:flex-end;gap:8px}
+      #hub-dlg button{font:inherit;font-size:14px;padding:8px 16px;border-radius:8px;border:1px solid #d5dbe6;background:#fff;color:inherit;cursor:pointer}
+      #hub-dlg button[value=go]{background:var(--p,#2563eb);border-color:transparent;color:#fff}
+    </style>
+    <script>
+      (() => {
+        const fab = document.getElementById('hub-fab'), dlg = document.getElementById('hub-dlg');
+        if (!/^https?:\/\//.test(fab.getAttribute('href'))) return fab.remove();   // HUB_URL trống / chưa thay = ẩn
+        fab.onclick = e => { e.preventDefault(); dlg.returnValue = ''; dlg.showModal(); };
+        dlg.onclick = e => { if (e.target === dlg) dlg.close(); };   // bấm ra ngoài = Ở lại
+        dlg.onclose = () => { if (dlg.returnValue === 'go') location.href = fab.href; };
+      })();
+    </script>
+  </body>
+</html>

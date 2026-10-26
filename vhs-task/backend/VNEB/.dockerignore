@@ -1,0 +1,8 @@
+bin/
+obj/
+.vs/
+*.user
+# Không đóng gói bí mật / file upload vào image
+appsettings.Local.json
+appsettings.*.Local.json
+wwwroot/uploads/

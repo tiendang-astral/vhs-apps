@@ -1,0 +1,23 @@
+# Bí mật
+appsettings.Local.json
+appsettings.*.Local.json
+
+# .NET build / Visual Studio
+bin/
+obj/
+.vs/
+*.user
+
+# File người dùng upload (hợp đồng, avatar) — dữ liệu runtime
+# (giữ thư mục rỗng vì Program.cs bắt buộc thư mục này tồn tại)
+backend/VNEB/wwwroot/uploads/*
+!backend/VNEB/wwwroot/uploads/.gitkeep
+
+# Frontend
+node_modules/
+build/
+coverage/
+npm-debug.log*
+
+# Biến môi trường compose (chứa mật khẩu)
+.env
