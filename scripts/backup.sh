@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 
 # Tên volume thật trên Docker (project name = tên thư mục). Đổi nếu khác.
-VOLUMES="vhs-task_uploads vhs-soquy_pgdata vhs-loans-data"
+VOLUMES="vhs-task_uploads so_quy_app_pgdata vhs-loans-data"
 # Stack có state — dừng để nén nhất quán. hub không có state nên bỏ qua.
 STACKS="vhs-task vhs-soquy vhs-loans"
 # File .env (bí mật, không nằm trong git) — giữ nguyên đường dẫn tương đối.

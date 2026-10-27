@@ -95,7 +95,7 @@ Web (cổng 10083) chuyển `/api`, `/uploads`, `/notificationHub` sang API, nê
 
 ## 6. Sao lưu & chuyển VPS
 
-Gồm 2 script. Dữ liệu cần mang theo: 3 volume (`vhs-task_uploads`, `vhs-soquy_pgdata`, `vhs-loans-data`) + 4 file `.env`. Code đã có trong git. DB SQL Server nằm máy khác, không nằm trong backup.
+Gồm 2 script. Dữ liệu cần mang theo: 3 volume (`vhs-task_uploads`, `so_quy_app_pgdata`, `vhs-loans-data`) + 4 file `.env`. Code đã có trong git. DB SQL Server nằm máy khác, không nằm trong backup.
 
 - **`./scripts/backup.sh`** (chạy ở VPS **cũ**): dừng các stack cho dữ liệu nhất quán (nhất là Postgres), nén 3 volume + 4 `.env` thành 1 file `migrate-<thời gian>.tar.gz`, rồi bật lại stack. VPS cũ vẫn chạy tiếp sau khi backup.
 - **`./scripts/restore.sh migrate-….tar.gz`** (chạy ở VPS **mới**, trong repo đã `git clone`): bung `.env` về chỗ cũ và nạp lại 3 volume. Không tự chạy app.
