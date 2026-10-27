@@ -419,7 +419,7 @@ const handleNotiClick = async (e: React.MouseEvent, noti: any) => {
       {/* HEADER: NotificationBell đã được xóa khỏi đây */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-white border-b border-slate-200 px-8 py-5 flex items-center justify-between shadow-sm z-20">
-          <h1 className="text-lg font-black text-slate-900 uppercase tracking-tight">Hệ thống Quản trị Doanh nghiệp</h1>
+          <h1 className="text-lg font-black text-slate-900 uppercase tracking-tight">Daily Work tasks</h1>
           {activeDept && (
              <div className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-[10px] font-black uppercase border border-blue-100 flex items-center gap-2">
                <Building2 size={12} /> {activeDept.name}

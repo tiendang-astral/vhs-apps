@@ -89,7 +89,7 @@ export default function RegisterUserPage() {
         </div>
         <div>
           <h1 className="text-xl font-black text-slate-800 uppercase tracking-tight">Thêm thành viên mới</h1>
-          <p className="text-sm text-slate-500 font-medium">Cấp quyền truy cập hệ thống ERP cho nhân sự mới</p>
+          <p className="text-sm text-slate-500 font-medium">Cấp quyền truy cập Daily Work tasks cho nhân sự mới</p>
         </div>
       </div>
 

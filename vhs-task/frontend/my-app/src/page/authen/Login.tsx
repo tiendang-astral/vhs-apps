@@ -68,7 +68,7 @@ localStorage.setItem("departmentName", userData.deptName);
       <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
           <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-3xl font-black mb-4 shadow-lg">V</div>
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight">HỆ THỐNG ERP</h2>
+          <h2 className="text-2xl font-black text-slate-800 tracking-tight">Daily Work tasks</h2>
           <p className="text-slate-400 text-sm font-medium">Vui lòng đăng nhập để tiếp tục</p>
         </div>
 

@@ -5,7 +5,7 @@
 | `hub/` | Trang tổng | 10079 | 10079 |
 | `vhs-soquy/` | Sổ quỹ | 10080 | 10082 |
 | `vhs-loans/` | Khoản vay | 10081 | 10081 |
-| `vhs-task/` | Hệ thống ERP (erp.erpunicore.vn) | 10083 | 10083 |
+| `vhs-task/` | Daily Work tasks (erp.erpunicore.vn) | 10083 | 10083 |
 
 ---
 
@@ -76,7 +76,7 @@ Nếu đích là máy hoặc thư mục khác: `HOST=root@x.x.x.x DIR=/root/abc 
 
 ---
 
-## 5. vhs-task (Hệ thống ERP)
+## 5. vhs-task (Daily Work tasks)
 
 Web (cổng 10083) chuyển `/api`, `/uploads`, `/notificationHub` sang API, nên chỉ cần 1 domain. Cổng API 10084 chỉ mở trên 127.0.0.1.
 
