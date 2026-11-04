@@ -2,26 +2,35 @@
 from ..modules import REGISTRY
 
 GENERAL = [
-    {'title': 'Quy trình chung', 'items': [
-        'Mọi khoản thu / chi đều qua các bước: Lập chứng từ → Duyệt cấp 1 → Giám đốc công ty trụ cột (Admin 2) duyệt cấp 2 → Admin tập đoàn duyệt cuối. Chỉ khi Admin tập đoàn duyệt, hệ thống mới ghi sổ và cập nhật báo cáo.',
-        'Thanh toán lương: Nhân sự lập (nhập tay hoặc tải lên biểu mẫu Excel) → Kế toán duyệt lương → GĐ công ty trụ cột → Admin tập đoàn.',
-        'Các nghiệp vụ khác (Thu Chi & Vay nợ, Thanh toán đối tác, Quỹ TM & tạm ứng): Kế toán lập → Kế toán trưởng → GĐ công ty trụ cột → Admin tập đoàn.',
-        'Nhóm công ty chưa có tài khoản GĐ công ty trụ cột thì chứng từ chuyển thẳng từ duyệt cấp 1 lên Admin tập đoàn.',
-        'Chứng từ ở trạng thái Nháp: người lập được sửa / xóa. Sau khi bấm "Gửi duyệt" thì không sửa được nữa.',
-        'Phát hiện sai sau khi đã gửi: bấm "Đề nghị mở lại" và ghi lý do. Chỉ Admin tập đoàn được mở lại cho người lập sửa (Kế toán trưởng, GĐ công ty trụ cột không có quyền này). Nếu chứng từ đã ghi sổ, mở lại sẽ tự hủy bút toán.',
-        'Người lập không được tự duyệt chứng từ của chính mình.',
+    {'title': 'Luồng duyệt chung (theo mô hình kế toán mới)', 'items': [
+        'Khi bấm "Gửi duyệt", hệ thống tự lập tuyến duyệt cho chứng từ, hiển thị ở khung "Tuyến duyệt" trong chi tiết chứng từ.',
+        'Khoản chi thông thường đến ngưỡng N: KTV lập → KTTH kiểm tra hồ sơ → CFO kiểm soát cấp 1 → Giám đốc nhóm duyệt → Ngân quỹ chi trên ngân hàng, ghi số UNC → hệ thống ghi sổ.',
+        'Khoản chi trên ngưỡng N: KTTH → CFO → KSNB kiểm tra trước → Giám đốc nhóm → Chủ tịch → Ngân quỹ chi.',
+        'Giao dịch đặc biệt (vay, góp vốn, chuyển nguồn giữa hai pháp nhân, NCC mới, bên liên quan như VHS – Đức Phát / Mai Phát Ngọc, ngoại tệ nhập thiết bị, bảo lãnh): KTTH → CFO → KSNB → Chủ tịch; Giám đốc nhóm không duyệt.',
+        'Khoản thu thông thường (thu tiền khách hàng, lãi tiền gửi…): KTV lập → KTTH kiểm tra, đối chiếu sổ phụ → ghi sổ.',
+        'Ngưỡng N đặt cho từng nhóm công ty ở Dữ liệu khai báo → Nhóm công ty (mặc định 200.000.000 đ).',
+        'Giai đoạn 2 có Kế toán trưởng nhóm: KTT nhóm kiểm soát cấp 1 khoản đến N; khoản trên N và giao dịch đặc biệt vẫn do CFO.',
+        'Công ty chưa có tài khoản Giám đốc nhóm: bước Giám đốc nhóm được thay bằng Chủ tịch.',
+    ]},
+    {'title': 'Quy tắc kiểm soát', 'items': [
+        'Người lập không tự duyệt chứng từ của mình. Mỗi người chỉ duyệt một bước trên cùng một chứng từ.',
+        'Người duyệt thấy sai: bấm "Trả lại" và ghi lý do – chứng từ về Nháp cho người lập sửa và gửi lại từ đầu.',
+        'Ngân quỹ chỉ bấm "Xác nhận đã chi & ghi sổ" sau khi lệnh trên ngân hàng đã thực hiện, và bắt buộc ghi số UNC / mã giao dịch.',
+        'Sau khi gửi duyệt, chứng từ không sửa được. Phát hiện sai sau khi đã ghi sổ: bấm "Đề nghị mở lại", ghi lý do; chỉ Quản trị hệ thống mở lại hoặc hủy. Mở lại chứng từ đã ghi sổ sẽ tự hủy bút toán.',
+        'KSNB hậu kiểm chứng từ đã ghi sổ ở tab "Chờ hậu kiểm"; bấm "Đã hậu kiểm" và ghi nhận xét.',
     ]},
     {'title': 'Dữ liệu khai báo', 'items': [
         'Mọi tài khoản đều được thêm / sửa / xóa danh mục (công ty, ngân hàng, tài khoản, hạng mục, đối tác & nhân viên) khi còn ở trạng thái Nháp.',
-        'Khai báo xong bấm "Khóa (Submit)": dữ liệu không sửa / xóa được nữa. Chỉ Admin tập đoàn mở khóa được.',
+        'Khai báo xong bấm "Khóa (Submit)": dữ liệu không sửa / xóa được nữa. Chỉ Quản trị hệ thống mở khóa được.',
         'Quỹ tiền mặt: Loại quỹ = Tiền mặt, không chọn ngân hàng, ghi tên thủ quỹ. Mã TK nên đặt TM-<mã công ty>.',
         'Nhân viên cần khai báo ở "Đối tác & nhân viên" (Loại = Nhân viên, có công ty) để theo dõi tạm ứng và lương.',
     ]},
     {'title': 'Báo cáo & quyền xem', 'items': [
-        'Nhân viên: xem nghiệp vụ được giao + Chi tiết theo ngày / tháng của các công ty phụ trách.',
-        'Kế toán trưởng: duyệt cấp 1, xem Chi tiết và Tổng hợp theo ngày / tháng của các công ty phụ trách.',
-        'GĐ công ty trụ cột (Admin 2): duyệt cấp 2, xem Dashboard, Chi tiết và Tổng hợp của các công ty trong nhóm trụ cột.',
-        'Admin tập đoàn: xem toàn bộ các công ty, Dashboard toàn tập đoàn (lọc được theo nhóm), Kiểm soát hạch toán, quản trị tài khoản.',
+        'Nhân viên / KTV: nghiệp vụ được giao + Chi tiết theo ngày / tháng của công ty phụ trách.',
+        'KTTH, KTT nhóm: kiểm tra / kiểm soát, xem Chi tiết và Tổng hợp của công ty phụ trách.',
+        'Giám đốc nhóm: duyệt cấp 2, xem Dashboard, Chi tiết, Tổng hợp của nhóm.',
+        'CFO, Chủ tịch: toàn tập đoàn, Dashboard lọc theo nhóm; CFO và KSNB xem Kiểm soát hạch toán.',
+        'Ngân quỹ: toàn tập đoàn, xác nhận chi. Quản trị hệ thống: tài khoản, dữ liệu khai báo, mở lại / hủy; không duyệt chi.',
         '"Thu / chi thực" trên báo cáo đã loại các khoản Nội bộ (chuyển tiền giữa các TK, rút / nộp tiền mặt).',
     ]},
 ]

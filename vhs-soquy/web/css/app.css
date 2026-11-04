@@ -265,3 +265,10 @@ table.tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size
 .scope-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 99px; background: var(--brand-soft); color: var(--brand-2); font-weight: 600; font-size: 12.5px; }
 .brand .logo.tmr { background: linear-gradient(135deg, #f5b544, #e07a1f 50%, #b4441a); box-shadow: 0 6px 16px -6px #e07a1f; font-size: 15px; }
 .brand b.app-name { font-size: 12.5px; line-height: 1.25; letter-spacing: .01em; }
+/* Trạng thái theo tuyến duyệt mới */
+.st-chk { background: var(--warn-soft); color: var(--warn); }
+.st-ctl { background: var(--violet-soft); color: var(--violet); }
+.st-pre { background: #fdeef3; color: #b0275a; }
+.st-dir { background: #e6f6fb; color: #0b7aa0; }
+.st-chair { background: #fff4d6; color: #8a6100; }
+.st-pay { background: var(--info-soft); color: var(--info); }

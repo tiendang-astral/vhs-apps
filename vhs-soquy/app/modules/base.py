@@ -39,14 +39,29 @@ class Ctx:
         self.cat_by_id = {r['id']: r for r in cats}
         self.cat_by_name = {r['name']: r for r in cats}
         self.partners = {r['name']: r for r in db.all('SELECT name, type, company_id FROM partners')}
+        self.companies = {r['id']: r for r in db.all(
+            'SELECT c.id, c.code, c.name, c.group_id, g.threshold_n FROM companies c LEFT JOIN company_groups g ON g.id=c.group_id')}
+
+    def is_group_company_name(self, name):
+        """Đối tác là một công ty trong hệ thống (bên liên quan)."""
+        n = (name or '').strip().lower()
+        return bool(n) and any(n in ((c['name'] or '').lower(), (c['code'] or '').lower()) for c in self.companies.values())
+
+    def active_roles(self, company_id):
+        """Vai trò đang có người phụ trách công ty (để biết bước nào có người duyệt)."""
+        if not hasattr(self, '_roles'):
+            self._roles = {}
+            for r in self.db.all("SELECT u.role, uc.company_id FROM users u JOIN user_companies uc ON uc.user_id=u.id WHERE u.active=1"):
+                self._roles.setdefault(r['company_id'], set()).add(r['role'])
+        return self._roles.get(company_id, set())
 
     def cat_id(self, name):
         c = self.cat_by_name.get(name)
         return c['id'] if c else None
 
     @property
-    def director_companies(self):
-        """Công ty có Giám đốc công ty trụ cột (Admin 2) đang hoạt động → chứng từ phải qua bước duyệt cấp 2."""
+    def director_companies(self):  # giữ cho tương thích
+        """Công ty có tài khoản Giám đốc nhóm đang hoạt động."""
         if not hasattr(self, '_dir_cos'):
             self._dir_cos = {r['company_id'] for r in self.db.all(
                 "SELECT uc.company_id FROM user_companies uc JOIN users u ON u.id=uc.user_id WHERE u.role='director' AND u.active=1")}
@@ -76,8 +91,8 @@ class Module:
     title = ''
     table = ''
     icon = 'doc'
-    l1_rule = 'chief'           # 'chief' = Kế toán trưởng duyệt cấp 1;  'perm' = nhân viên có quyền <key>.approve
-    l1_label = 'Kế toán trưởng'
+    l1_rule = 'chief'           # 'chief' = KTTH kiểm tra;  'perm' = thêm nhân viên có quyền <key>.approve
+    l1_label = 'KTTH'
     fields: list = []
     help: list = []
     importable = False          # True = có biểu mẫu Excel để nhập hàng loạt
@@ -161,6 +176,13 @@ class Module:
 
     def summary(self, doc):
         return doc.get('description') or ''
+
+    def special(self, doc, ctx):
+        """Giao dịch đặc biệt (vay, góp vốn, chuyển nguồn, NCC mới, bên liên quan…) → Chủ tịch duyệt, KSNB kiểm trước.
+        Trả về lý do (chuỗi) hoặc None."""
+        if doc.get('special_type'):
+            return doc['special_type']
+        return None
 
     def meta(self):
         return {'key': self.key, 'title': self.title, 'icon': self.icon, 'l1_rule': self.l1_rule, 'l1_label': self.l1_label,

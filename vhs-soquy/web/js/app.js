@@ -46,9 +46,9 @@ function renderLogin() {
       <div class="brand" style="padding:0"><div class="logo tmr">T</div><div><b>TIMORI GROUP</b><span>Hệ thống ERP tập đoàn</span></div></div>
       <div>
         <h1>${APP_NAME}</h1>
-        <p>Lập chứng từ thu chi, duyệt nhiều cấp (Kế toán trưởng → Giám đốc công ty trụ cột → Admin tập đoàn), tự động ghi sổ và cập nhật báo cáo theo thời gian thực.</p>
+        <p>Lập chứng từ thu chi, duyệt theo tuyến (KTTH → CFO → Giám đốc nhóm → Chủ tịch khi trên ngưỡng → Ngân quỹ chi), tự động ghi sổ và cập nhật báo cáo theo thời gian thực.</p>
         <div style="margin-top:22px">
-          <span class="pill">${icon('check')} Duyệt 3 cấp</span><span class="pill">${icon('check')} Nhập lương từ Excel</span><span class="pill">${icon('check')} Phân quyền theo công ty</span>
+          <span class="pill">${icon('check')} Tuyến duyệt theo ngưỡng N</span><span class="pill">${icon('check')} Nhập lương từ Excel</span><span class="pill">${icon('check')} Phân quyền theo công ty</span>
           <span class="pill">${icon('check')} Dashboard điều hành</span><span class="pill">${icon('check')} Kiểm soát hạch toán</span>
         </div>
       </div>
@@ -57,7 +57,7 @@ function renderLogin() {
     <div class="box">
       <form id="login-form" autocomplete="on">
         <h2>Đăng nhập</h2>
-        <p class="muted" style="margin:0">Sử dụng tài khoản được Admin tập đoàn cấp.</p>
+        <p class="muted" style="margin:0">Sử dụng tài khoản do Quản trị hệ thống cấp.</p>
         <div class="fld"><label>Tên đăng nhập</label><input class="input" name="username" autocomplete="username" required></div>
         <div class="fld"><label>Mật khẩu</label><input class="input" name="password" type="password" autocomplete="current-password" required></div>
         <div class="fld err" id="login-err" style="color:var(--out);min-height:18px"></div>
@@ -101,7 +101,7 @@ function renderShell() {
     <aside class="side">
       <div class="brand"><div class="logo tmr">T</div><div><b class="app-name">${appName()}</b><span>ERP · Quản lý dòng tiền</span></div></div>
       <nav class="nav" id="nav">${navHTML()}</nav>
-      <div class="side-foot">Phạm vi: ${u.role === 'admin' ? 'Toàn tập đoàn' : `${u.company_ids.length} công ty`}</div>
+      <div class="side-foot">Phạm vi: ${state.meta?.global_roles?.includes(u.role) ? 'Toàn tập đoàn' : `${u.company_ids.length} công ty`}</div>
     </aside>
     <div class="main">
       <header class="top">

@@ -45,7 +45,7 @@ def current_user(request, db=None):
         if not u or not u['active']:
             raise ApiError(401, 'Tài khoản không tồn tại hoặc đã bị khóa')
         u['perms'] = set(p for p in (u.pop('permissions') or '').split(',') if p)
-        if u['role'] == 'admin':
+        if u['role'] in ('admin', 'cfo', 'chairman', 'treasury', 'auditor'):   # vai trò toàn tập đoàn
             u['company_ids'] = [r['id'] for r in d.all('SELECT id FROM companies')]
         else:
             u['company_ids'] = [r['company_id'] for r in d.all('SELECT company_id FROM user_companies WHERE user_id=?', [uid])]

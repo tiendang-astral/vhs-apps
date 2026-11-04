@@ -9,8 +9,8 @@ from ..db import get_db
 from ..http import ApiError, body, current_user, ok, q_int, q_str, today
 from ..modules import REGISTRY, get_module
 from ..config import settings
-from ..permissions import (PERMISSIONS, ROLES, can_create, can_l1, can_view_dashboard, can_view_module, can_view_summary,
-                           is_admin, is_director, require)
+from ..permissions import (GLOBAL_ROLES, PERMISSIONS, ROLES, APPROVER_ROLES, can_create, can_l1, can_view_control,
+                           can_view_dashboard, can_view_module, can_view_summary, is_admin, is_global, require)
 from ..security import make_token, verify_password
 from ..services import guide as guide_svc
 from ..services import importer
@@ -32,19 +32,19 @@ def nav_for(u):
         if can_view_module(u, m):
             items.append({'key': f'docs/{m.key}', 'title': m.title, 'group': 'Nghiệp vụ', 'icon': m.icon,
                           'can_create': can_create(u, m)})
-    if is_admin(u) or is_director(u) or any(can_l1(u, m) for m in REGISTRY.values()):
-        items.append({'key': 'inbox', 'title': 'Chứng từ chờ duyệt', 'group': 'Nghiệp vụ'})
+    if is_admin(u) or u['role'] in APPROVER_ROLES or any(can_l1(u, m) for m in REGISTRY.values()):
+        items.append({'key': 'inbox', 'title': 'Đề nghị mở lại' if is_admin(u) else 'Chứng từ chờ tôi xử lý', 'group': 'Nghiệp vụ'})
     items += [{'key': 'ledger-day', 'title': 'Chi tiết theo ngày', 'group': 'Báo cáo'},
               {'key': 'ledger-month', 'title': 'Chi tiết theo tháng', 'group': 'Báo cáo'}]
     if can_view_summary(u):
         items += [{'key': 'summary-day', 'title': 'Tổng hợp theo ngày', 'group': 'Báo cáo'},
                   {'key': 'summary-month', 'title': 'Tổng hợp theo tháng', 'group': 'Báo cáo'}]
-    if is_admin(u):
+    if can_view_control(u):
         items.append({'key': 'control', 'title': 'Kiểm soát hạch toán', 'group': 'Báo cáo'})
     items.append({'key': 'master', 'title': 'Dữ liệu khai báo', 'group': 'Hệ thống'})
     if is_admin(u):
         items.append({'key': 'users', 'title': 'Tài khoản người dùng', 'group': 'Hệ thống'})
-    items.append({'key': 'guide', 'title': 'Hướng dẫn nhập liệu', 'group': 'Hệ thống'})
+    items.append({'key': 'guide', 'title': 'Hướng dẫn sử dụng', 'group': 'Hệ thống'})
     return items
 
 
@@ -80,7 +80,8 @@ def meta(request):
     return ok({'app_name': settings.APP_NAME, 'modules': [dict(m.meta(), can_create=can_create(u, m), can_l1=can_l1(u, m))
                            for m in REGISTRY.values() if can_view_module(u, m)],
                'all_modules': [{'key': m.key, 'title': m.title} for m in REGISTRY.values()],
-               'master': md.meta(), 'labels': md.LABELS, 'status': wf.STATUS, 'roles': ROLES,
+               'master': md.meta(), 'labels': md.LABELS, 'status': wf.STATUS, 'roles': ROLES, 'global_roles': list(GLOBAL_ROLES),
+               'steps': {k: v[0] for k, v in wf.STEPS.items()},
                'permissions': [{'key': k, 'label': v} for k, v in PERMISSIONS]})
 
 
@@ -98,6 +99,7 @@ def docs_list(request):
         return ok(wf.list_docs(db, u, m, status=q_str(request, 'status'), company_id=q_int(request, 'company_id'),
                                date_from=q_str(request, 'from'), date_to=q_str(request, 'to'), q=q_str(request, 'q'),
                                mine=q_str(request, 'mine') == '1', reopen=q_str(request, 'reopen') == '1',
+                               audit=q_str(request, 'audit') == '1',
                                limit=min(q_int(request, 'limit', 300), 2000), offset=q_int(request, 'offset', 0)))
 
 
@@ -240,22 +242,22 @@ def rep_ledger(request):
 def rep_summary_day(request):
     with get_db() as db:
         u = current_user(request, db)
-        require(can_view_summary(u), 'Chỉ Kế toán trưởng / Giám đốc xem tổng hợp')
+        require(can_view_summary(u), 'Tài khoản của bạn không xem được báo cáo tổng hợp')
         return ok(rp.summary_day(db, u, q_str(request, 'date', today()), q_int(request, 'company_id')))
 
 
 def rep_summary_month(request):
     with get_db() as db:
         u = current_user(request, db)
-        require(can_view_summary(u), 'Chỉ Kế toán trưởng / Giám đốc xem tổng hợp')
+        require(can_view_summary(u), 'Tài khoản của bạn không xem được báo cáo tổng hợp')
         return ok(rp.summary_month(db, u, q_str(request, 'month', today()[:7]), q_int(request, 'company_id')))
 
 
 def rep_dashboard(request):
     with get_db() as db:
         u = current_user(request, db)
-        require(can_view_dashboard(u), 'Dashboard dành cho Admin tập đoàn / GĐ công ty trụ cột')
-        # các nhóm trụ cột người dùng được xem (Admin: tất cả; Admin 2: nhóm có công ty được giao)
+        require(can_view_dashboard(u), 'Dashboard dành cho Chủ tịch, CFO, Giám đốc nhóm')
+        # các nhóm người dùng được xem (vai trò toàn tập đoàn: tất cả; Giám đốc nhóm: nhóm có công ty được giao)
         groups = [g for g in db.all('SELECT g.id, g.name, c.id AS company_id FROM company_groups g JOIN companies c ON c.group_id=g.id ORDER BY g.id')
                   if g['company_id'] in u['company_ids']]
         group_list = []
@@ -272,14 +274,14 @@ def rep_dashboard(request):
         data['group_options'] = group_list
         data['group_id'] = gid
         data['scope_label'] = (next((g['name'] for g in group_list if g['id'] == gid), '') if gid else
-                               'Toàn tập đoàn' if is_admin(u) else ' + '.join(g['name'] for g in group_list))
+                               'Toàn tập đoàn' if is_global(u) else ' + '.join(g['name'] for g in group_list))
         return ok(data)
 
 
 def rep_control(request):
     with get_db() as db:
         u = current_user(request, db)
-        require(is_admin(u), 'Chỉ Admin tập đoàn')
+        require(can_view_control(u), 'Chỉ Quản trị hệ thống, CFO, KSNB')
         return ok(rp.control(db, u))
 
 

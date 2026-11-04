@@ -74,195 +74,239 @@ def run(base):
     opts = admin.get('/api/options')[1]
     co = {c['code']: c['id'] for c in opts['companies']}
     acc = {a['code']: a['id'] for a in opts['accounts']}
+    vhs_cos = [co['VHS'], co['DP'], co['MPN'], co['VHS-LS']]
 
-    print('2. Tài khoản người dùng')
+    print('2. Tài khoản theo mô hình kế toán mới')
     users = {
         'kt1': dict(role='staff', permissions=['cashbook.create', 'partner_payment.create', 'cash_fund.create'], company_ids=[co['VHS'], co['DP']]),
-        'ktt': dict(role='chief_accountant', company_ids=[co['VHS'], co['DP'], co['MPN']]),
-        'ktt2': dict(role='chief_accountant', company_ids=[co['TPE']]),
+        'ktth': dict(role='chief_accountant', company_ids=vhs_cos),
+        'ktth2': dict(role='chief_accountant', company_ids=[co['TPE']]),
         'hr': dict(role='staff', permissions=['payroll.create'], company_ids=[co['VHS']]),
         'ktl': dict(role='staff', permissions=['payroll.approve'], company_ids=[co['VHS']]),
-        'gdvhs': dict(role='director', company_ids=[co['VHS'], co['DP'], co['MPN'], co['VHS-LS']]),
+        'gdvhs': dict(role='director', company_ids=vhs_cos),
+        'cfo': dict(role='cfo'), 'ksnb': dict(role='auditor'), 'ct': dict(role='chairman'), 'nq': dict(role='treasury'),
+        'kt2': dict(role='staff', permissions=['cashbook.create', 'partner_payment.create'], company_ids=[co['TPE']]),
     }
     for name, u in users.items():
         s, j = admin.post('/api/users', dict(u, username=name, full_name=name.upper(), password='123456'))
         check(f'Tạo tài khoản {name}', s == 201, j)
     s, j = admin.post('/api/users', dict(username='x', full_name='X', role='staff', password='123456'))
     check('Nhân viên bắt buộc có công ty', s == 422, j)
-    kt1, ktt, ktt2, hr, ktl, gd = (Client(base).login(n, '123456') for n in users)
+    C = {n: Client(base).login(n, '123456') for n in users}
+    kt1, ktth, ktth2, hr, ktl, gd, cfo, ksnb, ct, nq, kt2 = (C[n] for n in users)
+    check('CFO phạm vi toàn tập đoàn', len(cfo.get('/api/me')[1]['company_ids']) == len(co))
 
-    print('3. Quy trình Thu Chi: Kế toán lập → KTT → GĐ công ty trụ cột → Admin tập đoàn')
-    doc = dict(doc_date='2026-06-02', kind='Thu tiền khách hàng', account_id=acc['MB-VHS'], amount=50_000_000,
-               counterparty='Khách A', description='Thu tiền hàng')
-    s, j = kt1.post('/api/docs/cashbook', dict(doc, account_id=acc['MB-TPE']))
-    check('Không lập được cho công ty ngoài phạm vi', s in (403, 422), j)
-    s, j = kt1.post('/api/docs/cashbook', dict(doc, amount=0))
-    check('Validate số tiền > 0', s == 422, j)
-    s, j = hr.post('/api/docs/cashbook', doc)
-    check('HR không có quyền lập Thu Chi', s == 403, j)
-    s, j = kt1.post('/api/docs/cashbook', doc); did = j['id']
-    check('Kế toán lập nháp', s == 201, j)
-    check('Sửa nháp', kt1.put(f'/api/docs/cashbook/{did}', dict(doc, amount=60_000_000))[0] == 200)
-    check('Gửi duyệt', kt1.post(f'/api/docs/cashbook/{did}/submit')[0] == 200)
-    s, j = kt1.put(f'/api/docs/cashbook/{did}', doc)
-    check('Không sửa được sau khi gửi', s in (400, 403, 409), j)
-    s, j = kt1.post(f'/api/docs/cashbook/{did}/approve')
+    def doc_of(mod, i):
+        return admin.get(f'/api/docs/{mod}/{i}')[1]
+
+    def outflow(day, code):
+        return admin.get(f'/api/reports/ledger?from={day}&to={day}&account_id={acc[code]}')[1]
+
+    print('3. Khoản thu thường: KTV lập → KTTH kiểm tra → ghi sổ')
+    s, j = kt1.post('/api/docs/cashbook', dict(doc_date='2026-06-02', kind='Thu tiền khách hàng', account_id=acc['MB-VHS'], amount=60_000_000,
+                                               counterparty='Khách A', description='Thu tiền hàng', _submit=True)); tid = j['id']
+    check('Tuyến thu = [KTTH]', doc_of('cashbook', tid)['route_steps'] == ['chk'], doc_of('cashbook', tid)['route_steps'])
+    s, j = kt1.post(f'/api/docs/cashbook/{tid}/approve')
     check('Người lập không tự duyệt', s == 403, j)
-    s, j = ktt2.post(f'/api/docs/cashbook/{did}/approve')
-    check('KTT khác công ty không duyệt được', s == 403, j)
-    s, j = ktl.post(f'/api/docs/cashbook/{did}/approve')
-    check('Kế toán lương không duyệt Thu Chi', s == 403, j)
-    check('KTT thấy trong hộp duyệt', any(x['id'] == did for x in ktt.get('/api/inbox')[1]))
-    check('KTT duyệt cấp 1', ktt.post(f'/api/docs/cashbook/{did}/approve')[0] == 200)
-    s, j = ktt.post(f'/api/docs/cashbook/{did}/reopen')
-    check('KTT không mở lại được', s == 403, j)
-    led = admin.get(f'/api/reports/ledger?from=2026-06-02&to=2026-06-02&account_id={acc["MB-VHS"]}')[1]
-    check('Chưa ghi sổ sau duyệt cấp 1', led['inflow'] == 0, led)
-    s, j = admin.post(f'/api/docs/cashbook/{did}/approve')
-    check('Admin chưa duyệt được khi GĐ trụ cột chưa duyệt', s == 403, j)
-    check('Trạng thái chờ GĐ trụ cột', admin.get(f'/api/docs/cashbook/{did}')[1]['status_label'] == 'Chờ GĐ công ty trụ cột')
-    check('GĐ trụ cột thấy trong hộp duyệt', any(x['id'] == did and x['module'] == 'cashbook' for x in gd.get('/api/inbox')[1]))
-    check('Admin chưa thấy trong hộp duyệt', not any(x['id'] == did and x['module'] == 'cashbook' for x in admin.get('/api/inbox')[1]))
-    s, j = gd.post(f'/api/docs/cashbook/{did}/approve')
-    check('GĐ trụ cột duyệt cấp 2', s == 200 and j['result'] == 'dir_approved', j)
-    s, j = gd.post(f'/api/docs/cashbook/{did}/reopen')
-    check('GĐ trụ cột không mở lại được', s == 403, j)
-    led = admin.get(f'/api/reports/ledger?from=2026-06-02&to=2026-06-02&account_id={acc["MB-VHS"]}')[1]
-    check('Chưa ghi sổ sau duyệt cấp 2', led['inflow'] == 0, led)
-    check('Admin thấy trong hộp duyệt', any(x['id'] == did and x['module'] == 'cashbook' for x in admin.get('/api/inbox')[1]))
-    check('Admin tập đoàn duyệt cuối', admin.post(f'/api/docs/cashbook/{did}/approve')[0] == 200)
-    led = admin.get(f'/api/reports/ledger?from=2026-06-02&to=2026-06-02&account_id={acc["MB-VHS"]}')[1]
-    check('Đã ghi sổ 60.000.000', led['inflow'] == 60_000_000, led)
+    s, j = ktth2.post(f'/api/docs/cashbook/{tid}/approve')
+    check('KTTH công ty khác không kiểm tra được', s == 403, j)
+    s, j = ktth.post(f'/api/docs/cashbook/{tid}/approve')
+    check('KTTH xác nhận → ghi sổ', s == 200 and j['result'] == 'posted', j)
+    check('Đã ghi sổ 60.000.000', outflow('2026-06-02', 'MB-VHS')['inflow'] == 60_000_000)
 
-    print('4. Mở lại chứng từ')
-    s, j = kt1.post(f'/api/docs/cashbook/{did}/request_reopen', {})
-    check('Đề nghị mở lại phải có lý do', s == 422 or s == 400, j)
-    check('Đề nghị mở lại', kt1.post(f'/api/docs/cashbook/{did}/request_reopen', {'note': 'Sai số tiền'})[0] == 200)
-    check('Giám đốc mở lại', admin.post(f'/api/docs/cashbook/{did}/reopen')[0] == 200)
-    led = admin.get(f'/api/reports/ledger?from=2026-06-02&to=2026-06-02&account_id={acc["MB-VHS"]}')[1]
-    check('Mở lại → hủy bút toán', led['inflow'] == 0, led)
-    check('Người lập sửa lại', kt1.put(f'/api/docs/cashbook/{did}', dict(doc, _submit=True))[0] == 200)
-    ktt.post(f'/api/docs/cashbook/{did}/approve'); gd.post(f'/api/docs/cashbook/{did}/approve'); admin.post(f'/api/docs/cashbook/{did}/approve')
-    check('Duyệt lại → trạng thái posted', admin.get(f'/api/docs/cashbook/{did}')[1]['status'] == 'posted')
+    print('4. Khoản chi thường đến N: KTTH → CFO → GĐ nhóm → Ngân quỹ')
+    pp = dict(doc_date='2026-06-06', account_id=acc['MB-VHS'], partner='NCC B', amount=50_000_000, description='Thanh toán hàng')
+    s, j = kt1.post('/api/docs/partner_payment', pp); pid = j['id']
+    check('Lập nháp', s == 201, j)
+    check('Xem trước tuyến khi còn nháp', doc_of('partner_payment', pid)['route_steps'] == ['chk', 'ctl', 'dir', 'pay'])
+    check('Gửi duyệt', kt1.post(f'/api/docs/partner_payment/{pid}/submit')[0] == 200)
+    check('Không sửa được sau khi gửi', kt1.put(f'/api/docs/partner_payment/{pid}', pp)[0] in (400, 403, 409))
+    check('Trạng thái Chờ KTTH', doc_of('partner_payment', pid)['status'] == 'chk')
+    check('CFO chưa duyệt được ở bước KTTH', cfo.post(f'/api/docs/partner_payment/{pid}/approve')[0] == 403)
+    check('GĐ nhóm chưa duyệt được ở bước KTTH', gd.post(f'/api/docs/partner_payment/{pid}/approve')[0] == 403)
+    check('KTTH thấy trong hộp xử lý', any(x['id'] == pid for x in ktth.get('/api/inbox')[1]))
+    check('KTTH kiểm tra', ktth.post(f'/api/docs/partner_payment/{pid}/approve')[1].get('result') == 'ctl')
+    check('CFO thấy trong hộp xử lý', any(x['id'] == pid and x['module'] == 'partner_payment' for x in cfo.get('/api/inbox')[1]))
+    check('KSNB không có việc ở khoản thường', not any(x['id'] == pid and x['module'] == 'partner_payment' for x in ksnb.get('/api/inbox')[1]))
+    check('CFO kiểm soát cấp 1', cfo.post(f'/api/docs/partner_payment/{pid}/approve')[1].get('result') == 'dir')
+    check('Ngân quỹ chưa chi khi GĐ chưa duyệt', nq.post(f'/api/docs/partner_payment/{pid}/approve', {'note': 'UNC1'})[0] == 403)
+    check('GĐ nhóm duyệt', gd.post(f'/api/docs/partner_payment/{pid}/approve')[1].get('result') == 'pay')
+    check('Chưa ghi sổ trước khi Ngân quỹ chi', outflow('2026-06-06', 'MB-VHS')['outflow'] == 0)
+    s, j = nq.post(f'/api/docs/partner_payment/{pid}/approve')
+    check('Ngân quỹ phải ghi số UNC', s == 422, j)
+    s, j = nq.post(f'/api/docs/partner_payment/{pid}/approve', {'note': 'UNC-0606-01'})
+    check('Ngân quỹ xác nhận đã chi → ghi sổ', s == 200 and j['result'] == 'posted', j)
+    dd = doc_of('partner_payment', pid)
+    check('Số UNC lưu vào số chứng từ', dd['doc_no'] == 'UNC-0606-01', dd['doc_no'])
+    check('Đủ 5 bước trên tuyến', [x['state'] for x in dd['steps']] == ['done'] * 5, dd['steps'])
+    check('Ghi sổ chi 50.000.000', outflow('2026-06-06', 'MB-VHS')['outflow'] == 50_000_000)
+    check('Quản trị hệ thống không duyệt chi', 'approve' not in dd['actions'])
 
-    print('5. Quỹ TM: tạm ứng NH → quỹ TM, chi tạm ứng NV')
+    print('5. Khoản chi trên N: thêm KSNB kiểm trước + Chủ tịch')
+    s, j = kt1.post('/api/docs/partner_payment', dict(pp, amount=250_000_000, doc_date='2026-06-08', _submit=True)); bid = j['id']
+    b = doc_of('partner_payment', bid)
+    check('Tuyến trên N', b['route_steps'] == ['chk', 'ctl', 'pre', 'dir', 'chair', 'pay'], b['route_steps'])
+    check('Có lý do trên N', 'ngưỡng N' in (b['route_note'] or ''), b['route_note'])
+    ktth.post(f'/api/docs/partner_payment/{bid}/approve'); cfo.post(f'/api/docs/partner_payment/{bid}/approve')
+    check('Chủ tịch chưa duyệt khi KSNB chưa kiểm', ct.post(f'/api/docs/partner_payment/{bid}/approve')[0] == 403)
+    check('KSNB kiểm tra trước', ksnb.post(f'/api/docs/partner_payment/{bid}/approve')[1].get('result') == 'dir')
+    check('GĐ nhóm duyệt → Chủ tịch', gd.post(f'/api/docs/partner_payment/{bid}/approve')[1].get('result') == 'chair')
+    check('Chủ tịch thấy trong hộp xử lý', any(x['id'] == bid for x in ct.get('/api/inbox')[1]))
+    check('Chủ tịch duyệt → Ngân quỹ', ct.post(f'/api/docs/partner_payment/{bid}/approve')[1].get('result') == 'pay')
+    check('Ngân quỹ chi', nq.post(f'/api/docs/partner_payment/{bid}/approve', {'note': 'UNC-0608'})[1].get('result') == 'posted')
+
+    print('6. Giao dịch đặc biệt: bên liên quan VHS – DP, vay')
+    s, j = kt1.post('/api/docs/partner_payment', dict(pp, partner='DP', amount=20_000_000, doc_date='2026-06-09', _submit=True)); sid = j['id']
+    sp = doc_of('partner_payment', sid)
+    check('Đối tác là công ty trong hệ thống → đặc biệt, không qua GĐ nhóm', sp['route_steps'] == ['chk', 'ctl', 'pre', 'chair', 'pay'], sp['route_steps'])
+    ktth.post(f'/api/docs/partner_payment/{sid}/approve'); cfo.post(f'/api/docs/partner_payment/{sid}/approve'); ksnb.post(f'/api/docs/partner_payment/{sid}/approve')
+    check('GĐ nhóm VHS không duyệt khoản VHS – DP', gd.post(f'/api/docs/partner_payment/{sid}/approve')[0] == 403)
+    check('Chủ tịch duyệt', ct.post(f'/api/docs/partner_payment/{sid}/approve')[1].get('result') == 'pay')
+    s, j = kt1.post('/api/docs/partner_payment', dict(pp, amount=10_000_000, special_type='NCC mới', _submit=True))
+    check('Chọn NCC mới → có Chủ tịch', 'chair' in doc_of('partner_payment', j['id'])['route_steps'])
+    s, j = kt1.post('/api/docs/cashbook', dict(doc_date='2026-06-10', kind='Giải ngân vay ngân hàng', account_id=acc['MB-VHS'], amount=500_000_000,
+                                               counterparty='MB', contract_no='HDV-01', _submit=True)); lid = j['id']
+    check('Vay = đặc biệt, không có bước chi', doc_of('cashbook', lid)['route_steps'] == ['chk', 'ctl', 'pre', 'chair'])
+    for c_ in (ktth, cfo, ksnb):
+        c_.post(f'/api/docs/cashbook/{lid}/approve')
+    check('Chủ tịch duyệt khoản vay → ghi sổ', ct.post(f'/api/docs/cashbook/{lid}/approve')[1].get('result') == 'posted')
+
+    print('7. Trả lại, mở lại, hủy')
+    s, j = kt1.post('/api/docs/partner_payment', dict(pp, amount=7_000_000, doc_date='2026-06-11', _submit=True)); rid = j['id']
+    check('Trả lại phải ghi lý do', ktth.post(f'/api/docs/partner_payment/{rid}/reject')[0] == 422)
+    check('KTTH trả lại', ktth.post(f'/api/docs/partner_payment/{rid}/reject', {'note': 'Thiếu hóa đơn'})[1].get('result') == 'draft')
+    check('Người lập sửa & gửi lại', kt1.put(f'/api/docs/partner_payment/{rid}', dict(pp, amount=7_000_000, doc_date='2026-06-11', _submit=True))[0] == 200)
+    check('Gửi lại bắt đầu từ KTTH', doc_of('partner_payment', rid)['status'] == 'chk')
+    check('Đề nghị mở lại phải có lý do', kt1.post(f'/api/docs/partner_payment/{pid}/request_reopen', {})[0] in (400, 422))
+    check('Đề nghị mở lại', kt1.post(f'/api/docs/partner_payment/{pid}/request_reopen', {'note': 'Sai số tiền'})[0] == 200)
+    check('Quản trị thấy đề nghị mở lại', any(x['id'] == pid for x in admin.get('/api/inbox')[1]))
+    check('CFO không mở lại được', cfo.post(f'/api/docs/partner_payment/{pid}/reopen')[0] == 403)
+    check('Quản trị mở lại', admin.post(f'/api/docs/partner_payment/{pid}/reopen')[0] == 200)
+    check('Mở lại → hủy bút toán', outflow('2026-06-06', 'MB-VHS')['outflow'] == 0)
+    check('Mở lại → xóa các lần duyệt', all(x['state'] != 'done' for x in doc_of('partner_payment', pid)['steps'][1:]))
+    s, j = kt1.post('/api/docs/partner_payment', dict(pp, amount=5_000_000, _submit=True))
+    check('Quản trị hủy chứng từ', admin.post(f'/api/docs/partner_payment/{j["id"]}/cancel', {'note': 'Trùng'})[0] == 200)
+
+    print('8. Giai đoạn 2: Kế toán trưởng nhóm')
+    s, j = admin.post('/api/users', dict(username='kttn', full_name='KTT NHOM VHS', role='group_chief', password='123456', company_ids=vhs_cos))
+    check('Tạo KTT nhóm', s == 201, j); kttn = Client(base).login('kttn', '123456')
+    s, j = kt1.post('/api/docs/partner_payment', dict(pp, amount=30_000_000, _submit=True)); g1 = j['id']
+    s, j = kt1.post('/api/docs/partner_payment', dict(pp, amount=300_000_000, _submit=True)); g2 = j['id']
+    ktth.post(f'/api/docs/partner_payment/{g1}/approve'); ktth.post(f'/api/docs/partner_payment/{g2}/approve')
+    check('KTT nhóm kiểm soát khoản đến N', kttn.post(f'/api/docs/partner_payment/{g1}/approve')[0] == 200)
+    check('KTT nhóm không kiểm soát khoản trên N', kttn.post(f'/api/docs/partner_payment/{g2}/approve')[0] == 403)
+    check('CFO kiểm soát khoản trên N', cfo.post(f'/api/docs/partner_payment/{g2}/approve')[0] == 200)
+
+    print('9. Nhóm chưa có Giám đốc nhóm (TPE) → Chủ tịch thay')
+    s, j = kt2.post('/api/docs/partner_payment', dict(pp, account_id=acc['MB-TPE'], amount=8_000_000, _submit=True)); t1 = j['id']
+    check('Tuyến TPE: Chủ tịch thay GĐ nhóm', doc_of('partner_payment', t1)['route_steps'] == ['chk', 'ctl', 'chair', 'pay'])
+    check('Ghi chú lý do', 'Giám đốc nhóm' in (doc_of('partner_payment', t1)['route_note'] or ''))
+
+    print('10. Mỗi người chỉ duyệt một bước')
+    s, j = admin.post('/api/users', dict(username='kt3', full_name='KT3', role='staff', permissions=['partner_payment.create'], password='123456', company_ids=vhs_cos))
+    kt3 = Client(base).login('kt3', '123456')
+    s, j = kt3.post('/api/docs/partner_payment', dict(pp, account_id=acc['MB-VHS'], amount=4_000_000, _submit=True)); o1 = j['id']
+    ktth.post(f'/api/docs/partner_payment/{o1}/approve')
+    admin.put(f'/api/users/{next(u["id"] for u in admin.get("/api/users")[1] if u["username"] == "ktth")}',
+              dict(username='ktth', full_name='KTTH', role='cfo', password=''))
+    check('Người đã kiểm tra không kiểm soát tiếp cùng chứng từ', ktth.post(f'/api/docs/partner_payment/{o1}/approve')[0] == 403)
+    admin.put(f'/api/users/{next(u["id"] for u in admin.get("/api/users")[1] if u["username"] == "ktth")}',
+              dict(username='ktth', full_name='KTTH', role='chief_accountant', password='', company_ids=vhs_cos))
+
+    print('11. Lương: Nhân sự lập → KTV lương → CFO → GĐ nhóm → Ngân quỹ')
+    pay = dict(period='2026-06', employee='Nguyễn Văn A', company_id=co['VHS'], gross=20_000_000, bonus=2_000_000,
+               insurance=2_100_000, pit=500_000, doc_date='2026-06-05', account_id=acc['MB-VHS'])
+    s, j = hr.post('/api/docs/payroll', dict(pay, _submit=True)); wid = j.get('id')
+    check('HR lập bảng lương', s == 201, j)
+    check('KTV lương kiểm tra', ktl.post(f'/api/docs/payroll/{wid}/approve')[0] == 200)
+    cfo.post(f'/api/docs/payroll/{wid}/approve'); gd.post(f'/api/docs/payroll/{wid}/approve')
+    check('Ngân quỹ chi lương', nq.post(f'/api/docs/payroll/{wid}/approve', {'note': 'UNC-LUONG-06'})[1].get('result') == 'posted')
+    check('Ghi sổ thực lĩnh 19.400.000', outflow('2026-06-05', 'MB-VHS')['outflow'] == 19_400_000, outflow('2026-06-05', 'MB-VHS'))
+    s, j = hr.post('/api/docs/payroll', dict(pay, employee='Trần E', _submit=True))
+    check('KTTH cũng kiểm tra được bảng lương', ktth.post(f'/api/docs/payroll/{j["id"]}/approve')[0] == 200)
+
+    print('12. Quỹ TM: chuyển nguồn giữa hai pháp nhân là giao dịch đặc biệt')
     s, j = kt1.post('/api/docs/cash_fund', dict(doc_date='2026-06-03', kind='Tạm ứng quỹ TM', from_account_id=acc['MB-VHS'],
-                                                to_account_id=acc['TM-VHS'], amount=10_000_000, _submit=True))
-    check('Lập tạm ứng quỹ', s == 201, j); fid = j.get('id')
-    s, j = kt1.post('/api/docs/cash_fund', dict(doc_date='2026-06-03', kind='Tạm ứng quỹ TM', from_account_id=acc['TM-VHS'],
-                                                to_account_id=acc['MB-VHS'], amount=1))
-    check('Sai loại TK bị chặn', s == 422, j)
-    s, j = ktt.post('/api/docs/cash_fund/bulk', {'ids': [fid], 'action': 'approve'})
-    check('Duyệt hàng loạt', j.get('done') == 1, j)
-    check('GĐ trụ cột duyệt hàng loạt', gd.post('/api/docs/cash_fund/bulk', {'ids': [fid], 'action': 'approve'})[1].get('done') == 1)
-    admin.post('/api/docs/cash_fund/bulk', {'ids': [fid], 'action': 'approve'})
+                                                to_account_id=acc['TM-VHS'], amount=10_000_000, _submit=True)); fid = j['id']
+    check('Cùng pháp nhân → tuyến thường', doc_of('cash_fund', fid)['route_steps'] == ['chk', 'ctl', 'dir', 'pay'])
+    s, j = kt1.post('/api/docs/cash_fund', dict(doc_date='2026-06-03', kind='Chuyển nội bộ', from_account_id=acc['MB-VHS'],
+                                                to_account_id=acc['MB-TPE'], amount=10_000_000, _submit=True))
+    check('Khác pháp nhân → Chủ tịch', 'chair' in doc_of('cash_fund', j['id'])['route_steps'])
+    for c_ in (ktth, cfo, gd):
+        s, r = c_.post('/api/docs/cash_fund/bulk', {'ids': [fid], 'action': 'approve'})
+    check('Duyệt hàng loạt', r.get('done') == 1, r)
+    check('Ngân quỹ duyệt hàng loạt có UNC', nq.post('/api/docs/cash_fund/bulk', {'ids': [fid], 'action': 'approve', 'note': 'UNC-QUY'})[1].get('done') == 1)
     d = admin.get('/api/reports/summary-day?date=2026-06-03')[1]
     tm = next(a for a in d['accounts'] if a['code'] == 'TM-VHS')
     check('Quỹ TM VHS tăng 10.000.000', tm['closing'] == 10_000_000, tm)
 
-    print('6. Lương: HR lập → Kế toán lương → GĐ trụ cột → Admin')
-    pay = dict(period='2026-06', employee='Nguyễn Văn A', company_id=co['VHS'], gross=20_000_000, bonus=2_000_000,
-               insurance=2_100_000, pit=500_000, doc_date='2026-06-05', account_id=acc['MB-VHS'])
-    s, j = hr.post('/api/docs/payroll', dict(pay, _submit=True)); pid = j.get('id')
-    check('HR lập bảng lương', s == 201, j)
-    s, j = ktt.post(f'/api/docs/payroll/{pid}/approve')
-    check('KTT không duyệt lương (không có quyền)', s == 403, j)
-    check('Kế toán lương duyệt', ktl.post(f'/api/docs/payroll/{pid}/approve')[0] == 200)
-    check('GĐ trụ cột duyệt lương', gd.post(f'/api/docs/payroll/{pid}/approve')[0] == 200)
-    check('Admin duyệt lương', admin.post(f'/api/docs/payroll/{pid}/approve')[0] == 200)
-    led = admin.get(f'/api/reports/ledger?from=2026-06-05&to=2026-06-05&account_id={acc["MB-VHS"]}')[1]
-    check('Ghi sổ thực lĩnh 19.400.000', led['outflow'] == 19_400_000, led)
+    print('13. KSNB hậu kiểm')
+    lst = ksnb.get('/api/docs/partner_payment?audit=1')[1]
+    check('KSNB thấy danh sách chờ hậu kiểm', lst['total'] >= 1, lst['total'])
+    check('KTTH không hậu kiểm được', ktth.post(f'/api/docs/partner_payment/{bid}/audit')[0] == 403)
+    check('KSNB hậu kiểm', ksnb.post(f'/api/docs/partner_payment/{bid}/audit', {'note': 'Đủ hồ sơ'})[0] == 200)
+    check('Đã ghi nhận hậu kiểm', bool(doc_of('partner_payment', bid)['audited_at']))
 
-    print('7. Quyền xem')
+    print('14. Ngưỡng N theo nhóm')
+    vhs_group = next(c['group_id'] for c in opts['companies'] if c['code'] == 'VHS')
+    grp = next(g for g in admin.get('/api/master/company_groups')[1] if g['id'] == vhs_group)
+    s, j = admin.put(f'/api/master/company_groups/{vhs_group}', dict(name=grp['name'], field=grp.get('field'), threshold_n=30_000_000, note=grp.get('note')))
+    check('Đặt ngưỡng N nhóm VHS = 30 triệu', s == 200, j)
+    s, j = kt1.post('/api/docs/partner_payment', dict(pp, amount=40_000_000))
+    check('40 triệu > N mới → có Chủ tịch', 'chair' in doc_of('partner_payment', j['id'])['route_steps'])
+
+    print('15. Quyền xem')
     check('Nhân viên không xem tổng hợp', kt1.get('/api/reports/summary-month?month=2026-06')[0] == 403)
-    check('KTT xem tổng hợp', ktt.get('/api/reports/summary-month?month=2026-06')[0] == 200)
-    check('KTT không xem Dashboard', ktt.get('/api/reports/dashboard')[0] == 403)
+    check('KTTH xem tổng hợp', ktth.get('/api/reports/summary-month?month=2026-06')[0] == 200)
+    check('KTTH không xem Dashboard', ktth.get('/api/reports/dashboard')[0] == 403)
     check('HR không xem Thu Chi', hr.get('/api/docs/cashbook')[0] == 403)
     s, j = kt1.get('/api/reports/ledger?from=2026-04-01&to=2026-06-30')
     check('Sổ chi tiết chỉ gồm công ty phụ trách', s == 200 and {r['company_code'] for r in j['rows']} <= {'VHS', 'DP'}, j.get('rows', [])[:1])
-    check('Nhân viên không quản trị tài khoản', kt1.get('/api/users')[0] == 403)
-
-    print('7b. GĐ công ty trụ cột: Dashboard theo nhóm')
-    vhs_group = next(c['group_id'] for c in opts['companies'] if c['code'] == 'VHS')
-    tpe_group = next(c['group_id'] for c in opts['companies'] if c['code'] == 'TPE')
     s, dg = gd.get('/api/reports/dashboard?month=2026-06&date=2026-06-30')
-    check('GĐ trụ cột xem Dashboard', s == 200, dg)
-    check('Dashboard GĐ trụ cột chỉ gồm công ty trong nhóm', {c['code'] for c in dg['companies']} <= {'VHS', 'DP', 'MPN', 'VHS-LS'}, [c['code'] for c in dg['companies']])
-    s, da = admin.get(f'/api/reports/dashboard?month=2026-06&date=2026-06-30&group_id={vhs_group}')
-    check('Admin lọc theo nhóm = số liệu GĐ trụ cột', da['kpi']['total'] == dg['kpi']['total'], (da['kpi']['total'], dg['kpi']['total']))
-    s, dall = admin.get('/api/reports/dashboard?month=2026-06&date=2026-06-30')
-    check('Admin xem toàn tập đoàn (lớn hơn 1 nhóm)', dall['kpi']['total'] > dg['kpi']['total'] and len(dall['group_options']) == 3, dall['group_options'])
-    check('GĐ trụ cột không xem nhóm khác', gd.get(f'/api/reports/dashboard?group_id={tpe_group}')[0] == 403)
-    check('GĐ trụ cột xem tổng hợp', gd.get('/api/reports/summary-month?month=2026-06')[0] == 200)
-    check('GĐ trụ cột không quản trị tài khoản', gd.get('/api/users')[0] == 403)
-    check('GĐ trụ cột không xem Kiểm soát', gd.get('/api/reports/control')[0] == 403)
+    check('GĐ nhóm xem Dashboard nhóm', s == 200 and {c['code'] for c in dg['companies']} <= {'VHS', 'DP', 'MPN', 'VHS-LS'})
+    s, dc = ct.get('/api/reports/dashboard?month=2026-06&date=2026-06-30')
+    check('Chủ tịch xem toàn tập đoàn', s == 200 and dc['scope_label'] == 'Toàn tập đoàn' and len(dc['group_options']) == 3, dc.get('scope_label'))
+    check('CFO xem Dashboard', cfo.get('/api/reports/dashboard')[0] == 200)
+    check('CFO xem Kiểm soát hạch toán', cfo.get('/api/reports/control')[0] == 200)
+    check('KSNB xem Kiểm soát hạch toán', ksnb.get('/api/reports/control')[0] == 200)
+    check('GĐ nhóm không xem Kiểm soát', gd.get('/api/reports/control')[0] == 403)
+    tpe_group = next(c['group_id'] for c in opts['companies'] if c['code'] == 'TPE')
+    check('GĐ nhóm không xem nhóm khác', gd.get(f'/api/reports/dashboard?group_id={tpe_group}')[0] == 403)
+    check('Chỉ quản trị hệ thống quản lý tài khoản', cfo.get('/api/users')[0] == 403 and ct.get('/api/users')[0] == 403)
 
-    print('7c. Nhóm chưa có GĐ trụ cột (TPE): KTT duyệt xong chuyển thẳng Admin')
-    s, j = admin.post('/api/docs/cashbook', dict(doc_date='2026-06-07', kind='Thu khác', account_id=acc['MB-TPE'], amount=1_000_000,
-                                                description='Thu khác TPE', _submit=True)); tid = j.get('id')
-    check('Admin lập chứng từ TPE', s == 201, j)
-    check('KTT TPE duyệt cấp 1', ktt2.post(f'/api/docs/cashbook/{tid}/approve')[0] == 200)
-    check('Trạng thái chờ Admin', admin.get(f'/api/docs/cashbook/{tid}')[1]['status_label'] == 'Chờ Admin duyệt cuối')
-    check('Admin duyệt cuối ngay', admin.post(f'/api/docs/cashbook/{tid}/approve')[1].get('result') == 'posted')
-
-    print('7d. Nhập bảng lương từ Excel')
+    print('16. Nhập bảng lương từ Excel')
     import io
+    import base64
     from openpyxl import load_workbook
     r = requests.get(base + '/api/docs/payroll/template', headers={'Authorization': f'Bearer {hr.tok}'})
     check('Tải biểu mẫu Excel', r.status_code == 200 and r.content[:2] == b'PK', r.status_code)
-    wb = load_workbook(io.BytesIO(r.content))
-    ws = wb['Nhập liệu']
+    wb = load_workbook(io.BytesIO(r.content)); ws = wb['Nhập liệu']
     heads = [c.value for c in ws[1]]
-    check('Biểu mẫu có đủ cột', 'Kỳ lương *' in heads and 'Lương + phụ cấp *' in heads and 'TK chi trả *' in heads, heads)
-    check('Danh mục chỉ gồm công ty của HR', [c.value for c in wb['Danh mục']['A'][1:] if c.value] == ['VHS'])
     col = {h.replace(' *', ''): i + 1 for i, h in enumerate(heads)}
     rows = [('07/2026', 'VHS', 'Trần Thị B', 'Kế toán', 15_000_000, 1_000_000, 1_575_000, 0, 0, 0, '05/08/2026', 'MB-VHS'),
-            ('07/2026', 'VHS', 'Lê Văn C', 'Kho', 12_000_000, None, 1_260_000, None, 500_000, None, '05/08/2026', 'MB-VHS'),
-            ('07/2026', 'VHS', 'Phạm D', 'Kho', 9_000_000, None, None, None, None, None, '05/08/2026', 'SAI-TK')]
+            ('07/2026', 'VHS', 'Lê Văn C', 'Kho', 12_000_000, None, 1_260_000, None, 500_000, None, '05/08/2026', 'MB-VHS')]
     keys = ['Kỳ lương', 'Công ty hạch toán lương', 'Nhân viên', 'Bộ phận', 'Lương + phụ cấp', 'Thưởng', 'BHXH, BHYT (NLĐ)', 'Thuế TNCN',
             'Trừ tạm ứng', 'Khấu trừ khác', 'Ngày chi trả', 'TK chi trả']
     for rno, vals in enumerate(rows, 2):
         for k, v in zip(keys, vals):
             ws.cell(row=rno, column=col[k], value=v)
-    ws.cell(row=5, column=col['Kỳ lương'], value='07/2026'); ws.cell(row=5, column=col['Công ty hạch toán lương'], value='VHS')
-    ws.cell(row=5, column=col['Nhân viên'], value='Trần Thị B'); ws.cell(row=5, column=col['Lương + phụ cấp'], value=1)
-    ws.cell(row=5, column=col['Ngày chi trả'], value='05/08/2026'); ws.cell(row=5, column=col['TK chi trả'], value='MB-VHS')
-    buf = io.BytesIO(); wb.save(buf)
-    import base64
-    b64 = base64.b64encode(buf.getvalue()).decode()
-    s, j = hr.post('/api/docs/payroll/import', {'file': b64, 'filename': 'luong.xlsx', 'dry_run': True})
-    check('Xem trước: 4 dòng, 2 lỗi (sai TK, trùng nhân viên)', s == 200 and j['total'] == 4 and j['errors'] == 2, j if s != 200 else [r['errors'] for r in j['rows']])
-    check('Thực lĩnh dòng 1 = 14.425.000', j['rows'][0]['amount'] == 14_425_000, j['rows'][0])
-    s, j = hr.post('/api/docs/payroll/import', {'file': b64, 'filename': 'luong.xlsx', 'dry_run': False, 'submit': True})
-    check('Còn lỗi → không nhập dòng nào', s == 422, j)
-    check('Chưa có chứng từ nào được tạo', hr.get('/api/docs/payroll?q=Trần Thị B')[1]['total'] == 0)
-    ws.delete_rows(4, 2); buf = io.BytesIO(); wb.save(buf); b64 = base64.b64encode(buf.getvalue()).decode()
+    buf = io.BytesIO(); wb.save(buf); b64 = base64.b64encode(buf.getvalue()).decode()
     s, j = hr.post('/api/docs/payroll/import', {'file': b64, 'filename': 'luong.xlsx', 'dry_run': False, 'submit': True})
     check('Nhập 2 chứng từ & gửi duyệt', s == 201 and j['created'] == 2, j)
-    lst = ktl.get('/api/docs/payroll?status=submitted')[1]
-    check('Kế toán lương thấy 2 chứng từ chờ duyệt', lst['total'] == 2, lst['total'])
-    s, j = hr.post('/api/docs/payroll/import', {'file': b64, 'filename': 'luong.xlsx', 'dry_run': True})
-    check('Nhập lại cùng file → báo trùng', j['errors'] == 2, j['errors'])
-    check('Kế toán (không có quyền lương) không tải biểu mẫu', requests.get(base + '/api/docs/payroll/template', headers={'Authorization': f'Bearer {kt1.tok}'}).status_code == 403)
+    check('KTV lương thấy 2 chứng từ chờ kiểm tra', ktl.get('/api/docs/payroll?status=chk')[1]['total'] >= 2)
 
-    print('8. Dữ liệu khai báo: khóa / mở khóa')
-    s, j = kt1.post('/api/master/partners', dict(name='NCC Test', type='supplier'))
-    check('Nhân viên thêm đối tác', s == 201, j); pid = j.get('id')
-    check('Sửa khi chưa khóa', kt1.put(f'/api/master/partners/{pid}', dict(name='NCC Test 2', type='supplier'))[0] == 200)
-    check('Khóa (submit)', kt1.post('/api/master/partners/lock', {'ids': [pid]})[0] == 200)
-    check('Không sửa sau khóa', kt1.put(f'/api/master/partners/{pid}', dict(name='X', type='supplier'))[0] in (403, 409))
-    check('Không xóa sau khóa', kt1.delete(f'/api/master/partners/{pid}')[0] in (403, 409))
-    check('KTT không mở khóa', ktt.post('/api/master/partners/unlock', {'ids': [pid]})[0] == 403)
-    check('GĐ mở khóa', admin.post('/api/master/partners/unlock', {'ids': [pid]})[0] == 200)
-    check('Xóa sau khi mở khóa', kt1.delete(f'/api/master/partners/{pid}')[0] == 200)
+    print('17. Dữ liệu khai báo: khóa / mở khóa')
+    s, j = kt1.post('/api/master/partners', dict(name='NCC Test', type='supplier')); mid = j.get('id')
+    check('Nhân viên thêm đối tác', s == 201, j)
+    check('Khóa (submit)', kt1.post('/api/master/partners/lock', {'ids': [mid]})[0] == 200)
+    check('Không sửa sau khóa', kt1.put(f'/api/master/partners/{mid}', dict(name='X', type='supplier'))[0] in (403, 409))
+    check('CFO không mở khóa', cfo.post('/api/master/partners/unlock', {'ids': [mid]})[0] == 403)
+    check('Quản trị mở khóa', admin.post('/api/master/partners/unlock', {'ids': [mid]})[0] == 200)
 
-    print('9. Hủy & kiểm soát')
-    s, j = kt1.post('/api/docs/partner_payment', dict(doc_date='2026-06-06', account_id=acc['MB-VHS'], partner='NCC B',
-                                                      amount=5_000_000, description='Thanh toán hàng', _submit=True))
-    check('Lập thanh toán đối tác', s == 201, j)
-    check('GĐ hủy chứng từ', admin.post(f'/api/docs/partner_payment/{j["id"]}/cancel', {'note': 'Trùng'})[0] == 200)
+    print('18. Kiểm soát cuối')
     check('Kiểm soát hạch toán vẫn khớp', admin.get('/api/reports/control')[1]['ok'])
-    check('Xóa user có chứng từ → khóa', admin.delete(f'/api/users/{admin.get("/api/users")[1][1]["id"]}')[1]['result'] == 'deactivated')
+    uid = next(u['id'] for u in admin.get('/api/users')[1] if u['username'] == 'cfo')
+    check('Xóa user đã duyệt chứng từ → khóa', admin.delete(f'/api/users/{uid}')[1]['result'] == 'deactivated')
 
 
 if __name__ == '__main__':

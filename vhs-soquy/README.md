@@ -1,14 +1,14 @@
 # QUẢN TRỊ TÀI CHÍNH TIMORI GROUP
 
-Ứng dụng web quản trị dòng tiền cho các công ty trong tập đoàn, phát triển từ file Excel *Sổ quỹ VHS Group v8*. Mọi khoản thu chi đều đi qua quy trình duyệt nhiều cấp:
+Ứng dụng web quản trị dòng tiền cho các công ty trong tập đoàn, phát triển từ file Excel *Sổ quỹ VHS Group v8*. Từ phiên bản 2 (11/2026), luồng duyệt theo **Mô hình Tài chính – Kế toán TIMORI GROUP (v06)**: khi gửi duyệt, hệ thống tự lập *tuyến duyệt* cho từng chứng từ theo số tiền, ngưỡng N và loại giao dịch:
 
-**Lập → Duyệt cấp 1 (Kế toán trưởng / Kế toán duyệt lương) → Duyệt cấp 2 (GĐ công ty trụ cột – Admin 2) → Admin tập đoàn duyệt cuối.**
+**KTV lập → KTTH kiểm tra → CFO kiểm soát cấp 1 → (KSNB kiểm trước) → Giám đốc nhóm → (Chủ tịch) → Ngân quỹ chi, ghi số UNC → ghi sổ.**
 
-Khi Admin tập đoàn duyệt cuối, hệ thống tự ghi sổ và cập nhật ngay báo cáo, Dashboard.
+Khi bước cuối của tuyến hoàn tất, hệ thống tự ghi sổ và cập nhật ngay báo cáo, Dashboard.
 
 - **Backend:** Python 3.11+, Starlette và Uvicorn. Dùng PostgreSQL khi chạy thật, SQLite khi chạy thử.
 - **Frontend:** HTML/CSS/JavaScript thuần (ES modules), không cần bước build. Biểu đồ vẽ bằng SVG.
-- **Kiểm thử:** `tests/test_flow.py` có 91 bài kiểm thử, đạt 91/91 trên cả SQLite và PostgreSQL 16.
+- **Kiểm thử:** `tests/test_flow.py` có 113 bài kiểm thử theo luồng duyệt mới, đạt 113/113 trên cả SQLite và PostgreSQL 16.
 - **Dữ liệu cũ:** nạp sẵn 441 giao dịch từ file Excel (T4–T5/2026). Tổng số dư sau khi nạp là **863.233.490 đ**, khớp với file Excel.
 - **Cập nhật từ bản cũ:** khi khởi động, chương trình tự thêm các cột mới vào CSDL đã có, không cần chạy lệnh nâng cấp.
 
@@ -32,7 +32,7 @@ docker compose ps
 curl http://localhost:8000/api/health      # {"status":"ok"}
 ```
 
-Sau đó mở trình duyệt tới `http://<IP-server>:8000` và đăng nhập bằng `ADMIN_USERNAME` / `ADMIN_PASSWORD`. **Đổi mật khẩu ngay** ở menu góc phải, mục Đổi mật khẩu.
+Sau đó mở trình duyệt tới `http://<IP-server>:8000` và đăng nhập bằng `ADMIN_USERNAME` / `ADMIN_PASSWORD` (tài khoản Quản trị hệ thống). **Đổi mật khẩu ngay** ở menu góc phải, mục Đổi mật khẩu.
 
 ### Gắn tên miền và HTTPS (Nginx)
 
@@ -90,57 +90,54 @@ TEST_DATABASE_URL=postgresql://user:pass@host/db_trong python tests/test_flow.py
 | `DATABASE_URL` | `postgresql://user:pass@host:5432/db` hoặc `sqlite:///path.db` | `sqlite:///data/soquy.db` |
 | `SECRET_KEY` | Chuỗi bí mật dùng để ký phiên đăng nhập, ≥ 32 ký tự | tự sinh và lưu vào `data/.secret_key` |
 | `APP_NAME` | Tên hiển thị của ứng dụng | `QUẢN TRỊ TÀI CHÍNH TIMORI GROUP` |
-| `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_FULLNAME` | Tài khoản Admin tập đoàn, chỉ được tạo khi CSDL còn trống | `admin` / `Admin@123` |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_FULLNAME` | Tài khoản Quản trị hệ thống, chỉ được tạo khi CSDL còn trống | `admin` / `Admin@123` |
+| `APPROVAL_THRESHOLD` | Ngưỡng N mặc định (đ) khi nhóm chưa đặt ngưỡng riêng | `200000000` |
 | `SEED_LEGACY` | `1` = nạp dữ liệu sổ quỹ Excel cũ khi CSDL trống | `1` |
 | `TOKEN_HOURS` | Số giờ một phiên đăng nhập còn hiệu lực | `12` |
 | `DB_POOL_SIZE` | Số kết nối CSDL giữ sẵn | `10` |
 
-## 4. Quy trình và phân quyền
+## 4. Quy trình và phân quyền (phiên bản 2 – theo mô hình kế toán mới)
 
-| Nghiệp vụ | Người lập | Duyệt cấp 1 | Duyệt cấp 2 | Duyệt cuối |
-|---|---|---|---|---|
-| Thu Chi & Vay nợ (gồm Phí ngân hàng / SMS, Chi khác) | Kế toán (quyền *lập Thu Chi*) | Kế toán trưởng phụ trách công ty | GĐ công ty trụ cột | Admin tập đoàn → **ghi sổ** |
-| Thanh toán đối tác | Kế toán (quyền *lập Thanh toán đối tác*) | Kế toán trưởng | GĐ công ty trụ cột | Admin tập đoàn → **ghi sổ** |
-| Quỹ TM & tạm ứng | Kế toán / thủ quỹ | Kế toán trưởng | GĐ công ty trụ cột | Admin tập đoàn → **ghi sổ** |
-| Thanh toán lương (nhập tay hoặc **tải lên biểu mẫu Excel**) | Nhân sự (quyền *lập Thanh toán lương*) | Kế toán có quyền *duyệt lương* | GĐ công ty trụ cột | Admin tập đoàn → **ghi sổ** |
+### Tuyến duyệt
 
-**Tài khoản GĐ công ty trụ cột (Admin 2):**
+| Loại chứng từ | Tuyến duyệt |
+|---|---|
+| Khoản chi thường, đến ngưỡng N | KTTH kiểm tra → CFO kiểm soát cấp 1 → Giám đốc nhóm → Ngân quỹ chi & ghi sổ |
+| Khoản chi trên ngưỡng N | KTTH → CFO → KSNB kiểm tra trước → Giám đốc nhóm → Chủ tịch → Ngân quỹ chi |
+| Giao dịch đặc biệt (vay, góp vốn, chuyển nguồn giữa hai pháp nhân, NCC mới, bên liên quan VHS – DP / MPN, ngoại tệ nhập thiết bị, bảo lãnh) | KTTH → CFO → KSNB → Chủ tịch → (Ngân quỹ chi nếu có tiền ra). Giám đốc nhóm không duyệt |
+| Khoản thu thường | KTTH kiểm tra → ghi sổ |
+| Bảng lương | KTTH hoặc KTV lương kiểm tra → CFO → Giám đốc nhóm → Ngân quỹ chi |
 
-- Mỗi nhóm trụ cột (GROUP TPE, GROUP VHS, GROUP ASTRAL-X) có thể có một tài khoản Admin 2. Admin tập đoàn tạo tài khoản này và bấm **Cả nhóm** để giao toàn bộ công ty của nhóm.
-- Admin 2 duyệt cấp 2 cho các công ty trong nhóm, xem Dashboard, Chi tiết và Tổng hợp của nhóm mình.
-- Nếu một nhóm chưa có tài khoản Admin 2, chứng từ của nhóm đó chuyển thẳng từ duyệt cấp 1 lên Admin tập đoàn.
+- **Ngưỡng N**: đặt cho từng nhóm ở *Dữ liệu khai báo → Nhóm công ty* (cột Ngưỡng N); để trống dùng biến `APPROVAL_THRESHOLD` (mặc định 200.000.000 đ).
+- **Giai đoạn 2**: tạo tài khoản *Kế toán trưởng nhóm* → KTT nhóm kiểm soát cấp 1 khoản đến N của nhóm; khoản trên N và đặc biệt vẫn do CFO.
+- Công ty chưa có tài khoản Giám đốc nhóm: bước Giám đốc nhóm được thay bằng Chủ tịch.
+- Người lập không tự duyệt; **mỗi người chỉ duyệt một bước** trên cùng chứng từ.
+- Người duyệt bấm **Trả lại** (ghi lý do) → chứng từ về Nháp; người lập sửa và gửi lại từ đầu.
+- **Ngân quỹ** bấm *Xác nhận đã chi & ghi sổ* sau khi lệnh ngân hàng đã thực hiện, bắt buộc ghi số UNC (tự lưu vào Số chứng từ).
+- **KSNB** hậu kiểm chứng từ đã ghi sổ ở tab *Chờ hậu kiểm*.
+- **Mở lại / hủy**: chỉ Quản trị hệ thống. Mở lại chứng từ đã ghi sổ sẽ hủy bút toán và xóa các lần duyệt.
 
-**Nhập lương từ Excel:**
+### Vai trò
 
-1. Vào trang *Thanh toán lương* → bấm **Tải biểu mẫu Excel**. Biểu mẫu có sẵn danh sách chọn mã công ty, mã TK chi trả và nhân viên, chỉ gồm những công ty người dùng phụ trách.
-2. Điền mỗi nhân viên một dòng.
-3. Bấm **Nhập từ Excel** và chọn file. Hệ thống kiểm tra từng dòng, gồm:
-   - công ty có thuộc phạm vi phụ trách không;
-   - TK chi trả có tồn tại và còn hoạt động không;
-   - thực lĩnh có lớn hơn 0 không;
-   - dòng có trùng không (cùng công ty + kỳ lương + nhân viên, lặp trong file hoặc đã có trên hệ thống).
-4. Chỉ khi **tất cả** các dòng hợp lệ mới nhập; tick *Gửi duyệt luôn* nếu muốn gửi duyệt ngay sau khi nhập.
+| Vai trò | Phạm vi | Việc trên hệ thống |
+|---|---|---|
+| Nhân viên / Kế toán viên | Công ty được giao | Lập chứng từ theo quyền được tick; KTV lương kiểm tra bảng lương |
+| KTTH – Phụ trách kế toán | Công ty được giao | Bước KTTH kiểm tra hồ sơ; xem Tổng hợp |
+| Kế toán trưởng nhóm (giai đoạn 2) | Công ty được giao | Kiểm soát cấp 1 khoản đến N |
+| Giám đốc tài chính (CFO) | Toàn tập đoàn | Kiểm soát cấp 1; Dashboard; Kiểm soát hạch toán |
+| Kiểm soát nội bộ (KSNB) | Toàn tập đoàn | Kiểm tra trước khoản trên N / đặc biệt; hậu kiểm; Kiểm soát hạch toán |
+| Giám đốc nhóm | Công ty trong nhóm | Duyệt cấp 2; Dashboard nhóm |
+| Chủ tịch | Toàn tập đoàn | Duyệt khoản trên N, giao dịch đặc biệt; Dashboard |
+| Ngân quỹ – Thanh toán | Toàn tập đoàn | Xác nhận đã chi, ghi số UNC, ghi sổ |
+| Quản trị hệ thống | Toàn tập đoàn | Tài khoản, dữ liệu khai báo, mở lại / hủy chứng từ; **không duyệt chi** |
 
-Quy tắc chung:
+### Nâng cấp từ phiên bản 1
 
-- **Trạng thái chứng từ:** Nháp → Chờ duyệt cấp 1 → Chờ GĐ công ty trụ cột → Chờ Admin duyệt cuối → Đã duyệt & ghi sổ (hoặc Đã hủy).
-- **Người lập không được tự duyệt** chứng từ của mình.
-- **Phạm vi công ty:** Nhân viên và Kế toán trưởng chỉ thấy, lập và duyệt chứng từ của các công ty được giao.
-- **Mở lại chứng từ:** sau khi gửi duyệt, chứng từ không sửa được nữa. Người lập hoặc người duyệt bấm *Đề nghị mở lại* và ghi lý do. **Chỉ Admin tập đoàn** được mở lại chứng từ về Nháp; nếu chứng từ đã ghi sổ thì bút toán tự bị hủy. Kế toán trưởng và GĐ công ty trụ cột không có quyền mở lại.
-- **Dữ liệu khai báo** (công ty, nhóm, ngân hàng, tài khoản và quỹ tiền mặt, hạng mục, đối tác và nhân viên): mọi tài khoản đều được thêm, sửa, xóa khi dữ liệu còn ở trạng thái Nháp. Sau khi bấm **Khóa (Submit)** thì không sửa hay xóa được nữa; chỉ Admin tập đoàn mở khóa được.
-- **Tài khoản người dùng:** Admin tập đoàn thêm, sửa, xóa tài khoản Nhân viên, Kế toán trưởng và GĐ công ty trụ cột, giao công ty phụ trách và quyền nghiệp vụ. Tài khoản đã có chứng từ sẽ bị khóa thay vì xóa, để giữ lịch sử.
+Khi khởi động, chương trình tự thêm cột / bảng mới và chuyển chứng từ đang chờ duyệt sang tuyến mới (Chờ duyệt cấp 1 → Chờ KTTH; Chờ GĐ trụ cột → Chờ kiểm soát cấp 1; Chờ Admin duyệt cuối → bước kế tiếp sau Giám đốc nhóm). Sau khi nâng cấp, Quản trị hệ thống cần **tạo tài khoản CFO, Chủ tịch, Ngân quỹ, KSNB** ; tài khoản "Kế toán trưởng" cũ tự trở thành KTTH, "GĐ công ty trụ cột" cũ tự trở thành Giám đốc nhóm. Tài khoản `admin` không còn quyền duyệt chi.
 
-Quyền xem theo loại tài khoản:
+**Nhập lương từ Excel:** Trang *Thanh toán lương* → **Tải biểu mẫu Excel** → điền mỗi nhân viên một dòng → **Nhập từ Excel**. Hệ thống kiểm tra từng dòng (công ty phụ trách, TK chi trả, thực lĩnh > 0, trùng kỳ lương) và chỉ nhập khi tất cả các dòng hợp lệ.
 
-| Màn hình | Nhân viên | Kế toán trưởng | GĐ công ty trụ cột | Admin tập đoàn |
-|---|---|---|---|---|
-| Nghiệp vụ được giao hoặc được duyệt | ✓ | ✓ | ✓ (cả nhóm) | ✓ |
-| Chi tiết theo ngày / tháng | ✓ (công ty phụ trách) | ✓ | ✓ | ✓ |
-| Tổng hợp theo ngày / tháng | – | ✓ | ✓ | ✓ |
-| Dashboard | – | – | ✓ (các công ty trong nhóm) | ✓ (toàn tập đoàn, lọc được theo nhóm) |
-| Kiểm soát hạch toán, Tài khoản người dùng | – | – | – | ✓ |
-
-Trang **Hướng dẫn nhập liệu** trong ứng dụng thay cho sheet "Hướng dẫn" của file Excel.
+**Dữ liệu khai báo**: thêm / sửa / xóa khi còn Nháp; sau khi **Khóa (Submit)** chỉ Quản trị hệ thống mở khóa được.
 
 ## 5. Cấu trúc mã nguồn
 
@@ -154,7 +151,7 @@ app/
   modules/             MỖI NGHIỆP VỤ = 1 FILE (trường nhập, kiểm tra, cách ghi sổ)
     cashbook.py  partner_payment.py  payroll.py  cash_fund.py
   services/
-    workflow.py        quy trình lập, gửi, duyệt, ghi sổ, mở lại, hủy (dùng chung)
+    workflow.py        tuyến duyệt (build_route), lập, gửi, duyệt, trả lại, chi & ghi sổ, hậu kiểm, mở lại, hủy
     masterdata.py      dữ liệu khai báo, khóa / mở khóa
     reports.py         sổ chi tiết, tổng hợp, dashboard, kiểm soát
     users.py  guide.py
@@ -185,7 +182,7 @@ GET  /api/me  /api/meta  /api/options  /api/guide
 GET  /api/docs/{module}?status=&company_id=&from=&to=&q=&limit=&offset=
 POST /api/docs/{module}            tạo chứng từ ("_submit": true để gửi duyệt luôn)
 GET|PUT|DELETE /api/docs/{module}/{id}
-POST /api/docs/{module}/{id}/{submit|approve|request_reopen|reopen|cancel}   {"note"}
+POST /api/docs/{module}/{id}/{submit|approve|reject|audit|request_reopen|reopen|cancel}   {"note"}  (approve ở bước Ngân quỹ: note = số UNC)
 POST /api/docs/{module}/bulk       {"ids":[...], "action":"approve"}
 GET  /api/docs/{module}/template   tải biểu mẫu Excel (module có hỗ trợ nhập, hiện là payroll)
 POST /api/docs/{module}/import     {"file": "<base64 .xlsx>", "filename", "dry_run": true|false, "submit": true|false}

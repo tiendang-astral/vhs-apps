@@ -175,6 +175,9 @@ SCHEMA = [
         person TEXT, description TEXT, category_id BIGINT REFERENCES categories(id), doc_no TEXT, note TEXT)""",
     f"""CREATE TABLE IF NOT EXISTS doc_events (id {PK}, module TEXT NOT NULL, doc_id BIGINT NOT NULL, action TEXT NOT NULL,
         user_id BIGINT, user_name TEXT, note TEXT, at TEXT)""",
+    f"""CREATE TABLE IF NOT EXISTS doc_approvals (id {PK}, module TEXT NOT NULL, doc_id BIGINT NOT NULL, step TEXT NOT NULL,
+        user_id BIGINT, user_name TEXT, note TEXT, at TEXT)""",
+    "CREATE INDEX IF NOT EXISTS ix_ap_doc ON doc_approvals(module, doc_id)",
     f"""CREATE TABLE IF NOT EXISTS ledger_entries (id {PK}, module TEXT NOT NULL, doc_id BIGINT NOT NULL, line_no INTEGER NOT NULL,
         txn_date TEXT NOT NULL, account_id BIGINT NOT NULL REFERENCES accounts(id), company_id BIGINT NOT NULL REFERENCES companies(id),
         amount_in BIGINT NOT NULL DEFAULT 0, amount_out BIGINT NOT NULL DEFAULT 0, category_id BIGINT REFERENCES categories(id),
@@ -195,7 +198,13 @@ def startup_lock(db):
 
 DOC_TABLES = ('doc_cashbook', 'doc_partner_payment', 'doc_payroll', 'doc_cash_fund')
 # Cột bổ sung cho CSDL đã tạo từ phiên bản trước (tự thêm khi khởi động)
-MIGRATIONS = [(t, 'dir_by', 'BIGINT') for t in DOC_TABLES] + [(t, 'dir_at', 'TEXT') for t in DOC_TABLES]
+MIGRATIONS = ([(t, 'dir_by', 'BIGINT') for t in DOC_TABLES] + [(t, 'dir_at', 'TEXT') for t in DOC_TABLES]
+              # v2 – luồng duyệt theo mô hình kế toán mới
+              + [(t, 'route', 'TEXT') for t in DOC_TABLES] + [(t, 'route_note', 'TEXT') for t in DOC_TABLES]
+              + [(t, 'audited_by', 'BIGINT') for t in DOC_TABLES] + [(t, 'audited_at', 'TEXT') for t in DOC_TABLES]
+              + [(t, 'audit_note', 'TEXT') for t in DOC_TABLES]
+              + [('doc_cashbook', 'special_type', 'TEXT'), ('doc_partner_payment', 'special_type', 'TEXT'),
+                 ('company_groups', 'threshold_n', 'BIGINT')])
 
 
 def _columns(db, table):
@@ -212,3 +221,31 @@ def init_schema():
         for table, col, typ in MIGRATIONS:
             if col not in _columns(db, table):
                 db.execute(f'ALTER TABLE {table} ADD COLUMN {col} {typ}')
+        migrate_statuses(db)
+
+
+OLD_STATUS = ('submitted', 'l1_approved', 'dir_approved')
+
+
+def migrate_statuses(db):
+    """Chuyển chứng từ đang chờ duyệt theo luồng cũ sang luồng mới (chạy 1 lần, an toàn khi chạy lại)."""
+    from .modules import REGISTRY
+    from .modules.base import Ctx
+    from .services.workflow import build_route
+    for m in REGISTRY.values():
+        rows = db.all(f"SELECT * FROM {m.table} WHERE status IN ('submitted','l1_approved','dir_approved')")
+        if not rows:
+            continue
+        ctx = Ctx(db)
+        for d in rows:
+            route, note = build_route(m, d, ctx)
+            if d['status'] == 'submitted':
+                st = route[0]
+            elif d['status'] == 'l1_approved':
+                st = route[1] if len(route) > 1 else 'posted_pending'
+            else:
+                after = route[route.index('dir') + 1:] if 'dir' in route else route[2:]
+                st = after[0] if after else 'posted_pending'
+            if st == 'posted_pending':
+                st = route[-1]
+            db.update(m.table, d['id'], dict(status=st, route=','.join(route), route_note=note))

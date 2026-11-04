@@ -1,5 +1,5 @@
 // Dữ liệu khai báo: công ty, ngân hàng, tài khoản, hạng mục, đối tác & nhân viên.
-// Mọi tài khoản được thêm / sửa / xóa khi còn Nháp; sau khi Khóa (submit) chỉ Admin tập đoàn mở khóa được.
+// Mọi tài khoản được thêm / sửa / xóa khi còn Nháp; sau khi Khóa (submit) chỉ Quản trị hệ thống mở khóa được.
 import { $, $$, api, busy, confirmBox, date, debounce, empty, html, icon, money, overlay, parseMoney, raw, showError, toast } from '../core.js';
 import { fieldOptions, isAdmin, label, refreshOptions, state } from '../state.js';
 import { setQuery, setTitle } from '../app.js';
@@ -14,7 +14,7 @@ export async function renderMaster(el, _p, query) {
   const selected = new Set();
 
   el.innerHTML = String(html`
-    <div class="page-head"><div><h2>Dữ liệu khai báo</h2><p>Khai báo xong bấm <b>Khóa (Submit)</b> để chốt. Dữ liệu đã khóa không sửa / xóa được — chỉ Admin tập đoàn mở khóa.</p></div></div>
+    <div class="page-head"><div><h2>Dữ liệu khai báo</h2><p>Khai báo xong bấm <b>Khóa (Submit)</b> để chốt. Dữ liệu đã khóa không sửa / xóa được — chỉ Quản trị hệ thống mở khóa.</p></div></div>
     <div class="card"><div class="tabs" id="m-tabs"></div>
       <div class="card-b filters" style="border-bottom:1px solid var(--line-2)">
         <div class="search">${icon('search')}<input class="input" id="m-q" placeholder="Tìm kiếm…"></div>
@@ -86,7 +86,7 @@ export async function renderMaster(el, _p, query) {
       const op = lk.id === 'm-lock' ? 'lock' : 'unlock';
       const ids = rows.filter((r) => selected.has(r.id) && !!r.locked === (op === 'unlock')).map((r) => r.id);
       const ok = await confirmBox({ title: op === 'lock' ? 'Khóa dữ liệu khai báo' : 'Mở khóa dữ liệu', tone: op === 'lock' ? 'primary' : 'warn',
-        message: op === 'lock' ? `Khóa ${ids.length} dòng. Sau khi khóa sẽ không sửa / xóa được (chỉ Admin tập đoàn mở khóa).` : `Mở khóa ${ids.length} dòng để cho phép sửa lại.` });
+        message: op === 'lock' ? `Khóa ${ids.length} dòng. Sau khi khóa sẽ không sửa / xóa được (chỉ Quản trị hệ thống mở khóa).` : `Mở khóa ${ids.length} dòng để cho phép sửa lại.` });
       if (!ok) return;
       try { const r = await api(`/master/${tab}/${op}`, { method: 'POST', body: { ids } }); toast(`Đã ${op === 'lock' ? 'khóa' : 'mở khóa'} ${r.count} dòng`); load(); } catch (err) { showError(err); }
     }

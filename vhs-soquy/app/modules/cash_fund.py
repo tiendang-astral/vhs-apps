@@ -44,6 +44,12 @@ class CashFund(Module):
         p = ctx.partners.get(doc.get('person') or '')
         return p['company_id'] if p else None
 
+    def special(self, doc, ctx):
+        a, b = ctx.accounts.get(doc.get('from_account_id')), ctx.accounts.get(doc.get('to_account_id'))
+        if a and b and a['company_id'] != b['company_id']:
+            return 'Chuyển nguồn giữa hai pháp nhân'
+        return None
+
     def direction(self, doc):
         k = doc.get('kind')
         return 'move' if k in TWO_LEG else 'in' if k == 'Hoàn ứng nhân viên' else 'none' if k == 'Quyết toán tạm ứng' else 'out'

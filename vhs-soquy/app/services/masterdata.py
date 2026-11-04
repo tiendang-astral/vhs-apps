@@ -7,6 +7,8 @@ from ..permissions import is_admin, require
 MASTER = {
     'company_groups': dict(title='Nhóm công ty', fields=[
         Field('name', 'Tên nhóm', 'text', True, list=True), Field('field', 'Lĩnh vực', 'text', list=True, width=2),
+        Field('threshold_n', 'Ngưỡng N (đ)', 'money', list=True,
+              help='Khoản chi lớn hơn N: KSNB kiểm trước + Chủ tịch duyệt. Bỏ trống = mức mặc định 200.000.000 đ'),
         Field('note', 'Ghi chú', 'text', list=True)]),
     'companies': dict(title='Công ty', fields=[
         Field('code', 'Mã công ty', 'text', True, list=True), Field('name', 'Tên công ty', 'text', True, list=True, width=2),
@@ -130,14 +132,14 @@ def _get(db, table, id_):
 
 def update(db, user, table, id_, data):
     r = _get(db, table, id_)
-    require(not r['locked'] or is_admin(user), 'Dữ liệu đã khóa (Submit) – chỉ Admin tập đoàn mở khóa được')
+    require(not r['locked'] or is_admin(user), 'Dữ liệu đã khóa (Submit) – chỉ Quản trị hệ thống mở khóa được')
     rec = _clean(table, data)
     _integrity(lambda: db.update(table, id_, rec))
 
 
 def delete(db, user, table, id_):
     r = _get(db, table, id_)
-    require(not r['locked'] or is_admin(user), 'Dữ liệu đã khóa (Submit) – chỉ Admin tập đoàn mở khóa được')
+    require(not r['locked'] or is_admin(user), 'Dữ liệu đã khóa (Submit) – chỉ Quản trị hệ thống mở khóa được')
     _integrity(lambda: db.execute(f'DELETE FROM {table} WHERE id=?', [id_]))
 
 
@@ -153,7 +155,7 @@ def lock(db, user, table, ids):
 
 
 def unlock(db, user, table, ids):
-    require(is_admin(user), 'Chỉ Admin tập đoàn được mở khóa dữ liệu khai báo')
+    require(is_admin(user), 'Chỉ Quản trị hệ thống được mở khóa dữ liệu khai báo')
     spec(table)
     for id_ in ids:
         db.update(table, id_, {'locked': 0})

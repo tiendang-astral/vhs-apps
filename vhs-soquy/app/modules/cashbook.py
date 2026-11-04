@@ -28,6 +28,8 @@ class Cashbook(Module):
         Field('contract_no', 'Số HĐ vay / hóa đơn', 'text', help='Bắt buộc với vay / trả nợ'),
         Field('interest_rate', 'Lãi suất %/năm', 'number', show=LOAN_IN),
         Field('maturity_date', 'Ngày đáo hạn', 'date', show=LOAN_IN),
+        Field('special_type', 'Giao dịch đặc biệt', 'select', options=['Bảo lãnh', 'Bên liên quan', 'Khác (Chủ tịch duyệt)'],
+              help='Vay, góp vốn tự động là giao dịch đặc biệt'),
         Field('doc_no', 'Số chứng từ', 'text'),
         Field('note', 'Ghi chú', 'textarea', width=2),
     ]
@@ -36,7 +38,9 @@ class Cashbook(Module):
         'Thu: giải ngân vay ngân hàng, nhận vay cá nhân, thu tiền khách hàng, hoàn ứng NV chuyển khoản, góp vốn, lãi tiền gửi, thu khác.',
         'Chi: trả nợ gốc vay, trả lãi vay, phí ngân hàng / SMS (phí quản lý TK, phí chuyển tiền, SMS banking), chi khác.',
         'Khoản vay: ghi Số HĐ vay, lãi suất, ngày đáo hạn. Trả gốc / lãi cũng nhập ở đây với cùng Số HĐ vay để theo dõi dư nợ.',
-        'Lưu → Gửi duyệt → Kế toán trưởng duyệt → GĐ công ty trụ cột duyệt → Admin tập đoàn duyệt cuối → hệ thống tự ghi sổ và cập nhật báo cáo.',
+        'Khoản thu thông thường: KTV lập → KTTH kiểm tra, đối chiếu sổ phụ → ghi sổ.',
+        'Khoản chi: KTV lập → KTTH kiểm tra → CFO kiểm soát cấp 1 → Giám đốc nhóm duyệt (trên ngưỡng N: thêm KSNB và Chủ tịch) → Ngân quỹ chi, ghi số UNC → ghi sổ.',
+        'Vay, góp vốn (kể cả khoản nhận về) là giao dịch đặc biệt: KTTH → CFO → KSNB kiểm trước → Chủ tịch duyệt.',
     ]
 
     def direction(self, doc):
@@ -67,6 +71,11 @@ class Cashbook(Module):
         out = self.direction(doc) == 'out'
         return [dict(account_id=doc['account_id'], amount_in=0 if out else amt, amount_out=amt if out else 0,
                      category_id=cat, counterparty=doc.get('counterparty'), description=desc)]
+
+    def special(self, doc, ctx):
+        if doc.get('kind') in LOAN_IN + ['Nhận góp vốn']:
+            return doc['kind']
+        return doc.get('special_type') or None
 
     def summary(self, doc):
         return f"{doc.get('kind') or ''} – {doc.get('description') or ''}"

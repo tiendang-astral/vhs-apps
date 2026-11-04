@@ -1,21 +1,21 @@
-// Dashboard điều hành: Admin tập đoàn xem toàn bộ (lọc theo nhóm), GĐ công ty trụ cột xem nhóm được giao.
+// Dashboard điều hành: Chủ tịch, CFO xem toàn bộ (lọc theo nhóm), Giám đốc nhóm xem nhóm được giao.
 import { $, api, date, empty, html, icon, money, monthLabel, moneyShort, pct, todayStr } from '../core.js';
 import { combo, donut, hbars, PALETTE } from '../charts.js';
 import { setQuery, setTitle } from '../app.js';
-import { isAdmin } from '../state.js';
+import { isAdmin, state } from '../state.js';
 
 const kpi = (lbl, val, sub, ic, tone, extra = '') => html`<div class="card kpi ${tone === 'hero' ? 'hero' : ''}">
   <div class="lbl"><span class="ic ${tone === 'hero' ? '' : 'tone-' + tone}">${icon(ic)}</span>${lbl}</div>
   <div class="val">${val}</div><div class="sub">${sub}${extra}</div></div>`;
 
 export async function renderDashboard(el, _p, query) {
-  const admin = isAdmin();
-  setTitle('Dashboard', admin ? 'Tổng quan dòng tiền toàn tập đoàn' : 'Tổng quan dòng tiền nhóm công ty trụ cột');
+  const admin = ['admin', 'cfo', 'chairman'].includes(state.user?.role);
+  setTitle('Dashboard', admin ? 'Tổng quan dòng tiền toàn tập đoàn' : 'Tổng quan dòng tiền nhóm công ty');
   const f = { month: query.month || todayStr().slice(0, 7), date: query.date || todayStr(), group_id: query.group_id || '' };
   el.innerHTML = String(html`
     <div class="page-head"><div><h2>Dashboard điều hành <span class="scope-chip" id="d-scope"></span></h2>
-      <p>Số liệu chỉ gồm chứng từ đã được Admin tập đoàn duyệt cuối và ghi sổ.${admin ? '' : ' Bạn đang xem các công ty thuộc nhóm trụ cột được giao.'}</p></div><div class="sp"></div>
-      <div class="filters"><select class="input" id="d-group" title="Nhóm công ty trụ cột"></select><label class="small muted">Tháng</label><input class="input" type="month" id="d-month" value="${f.month}">
+      <p>Số liệu chỉ gồm chứng từ đã duyệt đủ tuyến và ghi sổ.${admin ? '' : ' Bạn đang xem các công ty thuộc nhóm được giao.'}</p></div><div class="sp"></div>
+      <div class="filters"><select class="input" id="d-group" title="Nhóm công ty"></select><label class="small muted">Tháng</label><input class="input" type="month" id="d-month" value="${f.month}">
       <label class="small muted">Ngày</label><input class="input" type="date" id="d-date" value="${f.date}">
       <button class="btn icon" id="d-print" title="In">${icon('printer')}</button></div></div>
     <div id="dash"><div class="spinner"></div></div>`);
@@ -39,9 +39,9 @@ const lastDay = (m) => { const [y, mo] = m.split('-').map(Number); const t = tod
 
 function draw(el, d) {
   const k = d.kpi, delta = k.prev_net ? (k.net - k.prev_net) / Math.abs(k.prev_net) : null;
-  const pending = Object.values(d.pending).reduce((a, s) => a + (s.submitted || 0) + (s.l1_approved || 0) + (s.dir_approved || 0), 0);
+  const pending = Object.values(d.pending).reduce((a, s) => a + ['chk', 'ctl', 'pre', 'dir', 'chair', 'pay'].reduce((x, k) => x + (s[k] || 0), 0), 0);
   const funds = d.cash_funds.filter((c) => ['opening', 'fund_in', 'other_in', 'employee_adv', 'other_out', 'returned', 'closing', 'at_day'].some((k) => c[k]));
-  // 1 nhóm (GĐ công ty trụ cột hoặc đang lọc 1 nhóm) → chia theo công ty; nhiều nhóm → chia theo nhóm
+  // 1 nhóm (Giám đốc nhóm hoặc đang lọc 1 nhóm) → chia theo công ty; nhiều nhóm → chia theo nhóm
   const groups = d.groups.filter((g) => d.companies.some((c) => c.group === g.name));
   const pie = groups.length > 1 ? { title: 'Số dư theo nhóm công ty', items: groups.map((g) => ({ label: g.name, value: g.closing })) }
     : { title: `Số dư theo công ty${groups[0] ? ' – ' + groups[0].name : ''}`, items: d.companies.map((c) => ({ label: c.code, value: c.closing })) };
@@ -58,7 +58,7 @@ function draw(el, d) {
       ${kpi(`Số dư ngày ${date(d.day)}`, money(k.day_total), html`<span class="in">+${moneyShort(k.day_in)}</span> · <span class="out">−${moneyShort(k.day_out)}</span> trong ngày`, 'calendar', 'info')}
       ${kpi('Dư nợ vay', money(k.loan_outstanding), `${d.loans.filter((l) => l.outstanding > 0).length} hợp đồng đang vay`, 'bank', 'violet')}
       ${kpi('Tạm ứng chưa hoàn', money(k.advances_outstanding), 'Nhân viên đang giữ tạm ứng', 'partner', 'warn')}
-      ${kpi('Chứng từ đang chờ duyệt', pending, html`<a href="#/inbox">Mở hộp chờ duyệt →</a>`, 'inbox', pending ? 'out' : 'in')}
+      ${kpi('Chứng từ đang chờ duyệt', pending, html`<a href="#/inbox">Mở chứng từ chờ xử lý →</a>`, 'inbox', pending ? 'out' : 'in')}
     </div>
     ${d.alerts.length ? html`<div class="note err mt">${icon('alert')}<div><b>Cảnh báo số dư:</b> ${d.alerts.map((a) => html`<div>${a.code} (${a.company_code}): ${a.alert} – số dư ${money(a.closing)}</div>`)}</div></div>` : ''}
 

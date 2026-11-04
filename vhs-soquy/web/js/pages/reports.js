@@ -16,7 +16,7 @@ export const renderLedger = (mode) => async (el, _p, query) => {
   setTitle(day ? 'Chi tiết theo ngày' : 'Chi tiết theo tháng', 'Báo cáo · Sổ quỹ chi tiết từ chứng từ đã ghi sổ');
   const f = { date: query.date || todayStr(), month: query.month || todayStr().slice(0, 7), company_id: query.company_id || '', account_id: query.account_id || '', category_id: query.category_id || '' };
   el.innerHTML = String(html`
-    <div class="page-head"><div><h2>${day ? 'Sổ quỹ chi tiết theo ngày' : 'Sổ quỹ chi tiết theo tháng'}</h2><p>Chỉ gồm chứng từ đã được Admin tập đoàn duyệt cuối. Số dư lũy kế tính theo bộ lọc tài khoản / công ty.</p></div></div>
+    <div class="page-head"><div><h2>${day ? 'Sổ quỹ chi tiết theo ngày' : 'Sổ quỹ chi tiết theo tháng'}</h2><p>Chỉ gồm chứng từ đã duyệt đủ tuyến và ghi sổ. Số dư lũy kế tính theo bộ lọc tài khoản / công ty.</p></div></div>
     <div class="card mb"><div class="card-b filters">
       ${day ? html`<input class="input" type="date" id="l-date" value="${f.date}">` : html`<input class="input" type="month" id="l-month" value="${f.month}">`}
       <select class="input" id="l-company">${companyOpts(f.company_id)}</select>

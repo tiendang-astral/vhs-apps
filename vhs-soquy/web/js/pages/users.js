@@ -1,32 +1,37 @@
-// Quản trị tài khoản (chỉ Admin tập đoàn): thêm / sửa / xóa, giao công ty phụ trách và quyền nghiệp vụ.
+// Quản trị tài khoản (chỉ Quản trị hệ thống): thêm / sửa / xóa, giao công ty phụ trách và quyền nghiệp vụ.
 import { $, $$, api, busy, confirmBox, date, html, icon, initials, overlay, raw, showError, toast } from '../core.js';
 import { state } from '../state.js';
 import { setTitle } from '../app.js';
 
 const ROLE_HINT = {
-  staff: 'Lập chứng từ các nghiệp vụ được giao. Có quyền "Duyệt lương" thì là Kế toán duyệt lương (duyệt cấp 1 bảng lương).',
-  chief_accountant: 'Duyệt cấp 1 các nghiệp vụ Thu Chi, Thanh toán đối tác, Quỹ TM của công ty phụ trách; xem Chi tiết + Tổng hợp.',
-  director: 'Admin 2 – Giám đốc công ty trụ cột: duyệt cấp 2 (sau Kế toán trưởng / Kế toán duyệt lương) cho các công ty được giao, xem Dashboard + Chi tiết + Tổng hợp của nhóm. Bấm "Cả nhóm" để giao toàn bộ công ty của nhóm trụ cột.',
-  admin: 'Admin tập đoàn – toàn quyền: duyệt cuối, mở lại chứng từ, mở khóa dữ liệu, quản trị tài khoản, Dashboard toàn tập đoàn.',
+  staff: 'Nhân viên / Kế toán viên: lập chứng từ theo quyền được tick bên dưới, cho các công ty được giao.',
+  chief_accountant: 'KTTH – Phụ trách kế toán: bước "KTTH kiểm tra hồ sơ" (kể cả bảng lương) của công ty được giao; xem Chi tiết + Tổng hợp.',
+  group_chief: 'Kế toán trưởng nhóm (giai đoạn 2): kiểm soát cấp 1 khoản đến ngưỡng N của nhóm. Khoản trên N, giao dịch đặc biệt vẫn do CFO.',
+  cfo: 'Giám đốc tài chính: kiểm soát cấp 1 mọi chứng từ toàn tập đoàn; xem Dashboard, Tổng hợp, Kiểm soát hạch toán.',
+  auditor: 'Kiểm soát nội bộ: kiểm tra trước khoản trên N và giao dịch đặc biệt; hậu kiểm chứng từ đã ghi sổ; xem toàn tập đoàn.',
+  director: 'Giám đốc nhóm: duyệt cấp 2 khoản chi của công ty trong nhóm; xem Dashboard nhóm. Bấm "Cả nhóm" để giao toàn bộ công ty của nhóm.',
+  chairman: 'Chủ tịch: duyệt khoản trên ngưỡng N và giao dịch đặc biệt; xem Dashboard toàn tập đoàn.',
+  treasury: 'Ngân quỹ – Thanh toán: chi trên ngân hàng sau khi đủ duyệt, nhập số UNC và xác nhận để ghi sổ; toàn tập đoàn.',
+  admin: 'Quản trị hệ thống: tài khoản, dữ liệu khai báo, mở lại / hủy chứng từ. Không tham gia duyệt chi.',
 };
 
 export async function renderUsers(el) {
   setTitle('Tài khoản người dùng', 'Hệ thống · Phân quyền theo vai trò & công ty');
-  const roleTone = { staff: 'st-open', chief_accountant: 'st-l1_approved', director: 'st-dir_approved', admin: 'st-posted' };
+  const roleTone = { staff: 'st-open', chief_accountant: 'st-chk', group_chief: 'st-ctl', cfo: 'st-ctl', auditor: 'st-pre', director: 'st-dir', chairman: 'st-chair', treasury: 'st-pay', admin: 'st-posted' };
   const companies = state.options.companies, groups = state.options.company_groups;
   const perms = state.meta.permissions;
   let users = [];
   const load = async () => {
     users = await api('/users');
     el.innerHTML = String(html`
-      <div class="page-head"><div><h2>Tài khoản người dùng</h2><p>4 loại tài khoản: Nhân viên, Kế toán trưởng, Giám đốc công ty trụ cột (Admin 2), Admin tập đoàn. Ngoài Admin tập đoàn, mọi tài khoản chỉ thấy dữ liệu của công ty được giao.</p></div>
+      <div class="page-head"><div><h2>Tài khoản người dùng</h2><p>9 vai trò theo mô hình kế toán mới. Vai trò toàn tập đoàn (CFO, Chủ tịch, Ngân quỹ, KSNB, Quản trị hệ thống) không cần giao công ty; các vai trò khác chỉ thấy dữ liệu của công ty được giao.</p></div>
         <div class="sp"></div><button class="btn primary" id="u-add">${icon('plus')} Thêm tài khoản</button></div>
       <div class="card"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Người dùng</th><th>Vai trò</th><th>Quyền nghiệp vụ</th><th>Công ty phụ trách</th><th>Trạng thái</th><th>Ngày tạo</th><th></th></tr></thead>
       <tbody>${users.map((u) => html`<tr>
         <td><div class="row" style="flex-wrap:nowrap"><div class="avatar">${initials(u.full_name)}</div><div><b>${u.full_name}</b><div class="small muted">@${u.username}</div></div></div></td>
         <td><span class="badge ${roleTone[u.role]}">${u.role_label}</span></td>
         <td class="small">${u.role === 'staff' ? u.permissions.map((p) => perms.find((x) => x.key === p)?.label || p).join(', ') || html`<span class="muted">Chỉ xem</span>` : html`<span class="muted">Theo vai trò</span>`}</td>
-        <td class="small">${u.role === 'admin' ? html`<span class="muted">Toàn tập đoàn</span>` : u.company_ids.map((id) => companies.find((c) => c.id === id)?.code).filter(Boolean).join(', ')}</td>
+        <td class="small">${state.meta.global_roles.includes(u.role) ? html`<span class="muted">Toàn tập đoàn</span>` : u.company_ids.map((id) => companies.find((c) => c.id === id)?.code).filter(Boolean).join(', ')}</td>
         <td>${u.active ? html`<span class="badge st-posted">Hoạt động</span>` : html`<span class="badge st-cancelled">Đã khóa</span>`}</td>
         <td class="small">${date(u.created_at)}</td>
         <td class="num"><button class="btn sm ghost" data-edit="${u.id}">${icon('edit')} Sửa</button>
@@ -69,7 +74,7 @@ export async function renderUsers(el) {
       const r = f.role.value;
       $('#role-hint', dlg).textContent = ROLE_HINT[r];
       $('#perm-box', dlg).classList.toggle('hidden', r !== 'staff');
-      $('#co-box', dlg).classList.toggle('hidden', r === 'admin');
+      $('#co-box', dlg).classList.toggle('hidden', state.meta.global_roles.includes(r));
     };
     f.role.onchange = sync; sync();
     f.addEventListener('click', (ev) => {

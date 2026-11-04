@@ -4,11 +4,14 @@ import { companyCode, fieldOptions, isAdmin, label, moduleMeta, myCompanies, par
 import { refreshBadge, setQuery, setTitle } from '../app.js';
 
 const PAGE = 100;
-const TABS = [['', 'Tất cả'], ['draft', 'Nháp'], ['submitted', 'Chờ duyệt cấp 1'], ['l1_approved', 'Chờ GĐ trụ cột'], ['dir_approved', 'Chờ Admin duyệt cuối'],
-  ['posted', 'Đã ghi sổ'], ['cancelled', 'Đã hủy'], ['reopen', 'Đề nghị mở lại']];
+const TAB_KEYS = ['draft', 'chk', 'ctl', 'pre', 'dir', 'chair', 'pay', 'posted', 'cancelled'];
+const tabs = () => [['', 'Tất cả'], ...TAB_KEYS.map((k) => [k, state.meta.status[k]]), ['reopen', 'Đề nghị mở lại'],
+  ...(state.user?.role === 'auditor' ? [['audit', 'Chờ hậu kiểm']] : [])];
 const ACTION = {
   submit: { label: 'Gửi duyệt', icon: 'send', tone: 'primary' },
   approve: { label: 'Duyệt', icon: 'check', tone: 'success' },
+  reject: { label: 'Trả lại', icon: 'undo', tone: 'warn', input: 'Lý do trả lại cho người lập (bắt buộc)' },
+  audit: { label: 'Đã hậu kiểm', icon: 'check', tone: 'primary', input: 'Nhận xét hậu kiểm (không bắt buộc)' },
   request_reopen: { label: 'Đề nghị mở lại', icon: 'flag', tone: 'warn', input: 'Lý do / nội dung sai cần sửa (bắt buộc)' },
   reopen: { label: 'Mở lại cho sửa', icon: 'undo', tone: 'warn', input: 'Ghi chú (không bắt buộc)' },
   cancel: { label: 'Hủy chứng từ', icon: 'ban', tone: 'danger', input: 'Lý do hủy' },
@@ -49,7 +52,7 @@ const visible = (f, d) => !f.show || f.show.includes(d.kind);
 export async function renderModule(el, [key], query) {
   const m = moduleMeta(key);
   if (!m) throw new Error('Không có quyền truy cập nghiệp vụ này');
-  setTitle(m.title, `Nghiệp vụ · ${m.l1_label} → GĐ công ty trụ cột → Admin tập đoàn`);
+  setTitle(m.title, 'Nghiệp vụ · KTTH → CFO → Giám đốc nhóm (trên N: KSNB, Chủ tịch) → Ngân quỹ chi');
   const f = { status: query.status || '', company_id: query.company_id || '', from: query.from || '', to: query.to || '', q: query.q || '', mine: query.mine || '', page: +query.page || 0 };
   const cols = m.fields.filter((x) => x.list && x.name !== 'doc_date');
   const amountField = m.fields.find((x) => x.name === 'amount' || x.name === 'net');
@@ -85,14 +88,14 @@ export async function renderModule(el, [key], query) {
     setQuery(f);
     $('#list').innerHTML = '<div class="spinner"></div>';
     try {
-      data = await api('/docs/' + key, { query: { status: f.status === 'reopen' ? '' : f.status, reopen: f.status === 'reopen' ? 1 : '', company_id: f.company_id, from: f.from, to: f.to, q: f.q, mine: f.mine ? 1 : '', limit: PAGE, offset: f.page * PAGE } });
+      data = await api('/docs/' + key, { query: { status: ['reopen', 'audit'].includes(f.status) ? '' : f.status, reopen: f.status === 'reopen' ? 1 : '', audit: f.status === 'audit' ? 1 : '', company_id: f.company_id, from: f.from, to: f.to, q: f.q, mine: f.mine ? 1 : '', limit: PAGE, offset: f.page * PAGE } });
     } catch (e) { $('#list').innerHTML = String(html`<div class="note err">${e.message}</div>`); return; }
     selected.clear(); draw();
   }
 
   function draw() {
-    const c = data.counts || {}, all = Object.entries(c).filter(([k]) => k !== 'reopen').reduce((a, [, v]) => a + v, 0);
-    $('#tabs').innerHTML = String(html`${TABS.map(([k, t]) => html`<button class="${f.status === k ? 'on' : ''}" data-tab="${k}">${t}
+    const c = data.counts || {}, all = Object.entries(c).filter(([k]) => !['reopen', 'audit'].includes(k)).reduce((a, [, v]) => a + v, 0);
+    $('#tabs').innerHTML = String(html`${tabs().filter(([k]) => !k || k === f.status || c[k]).map(([k, t]) => html`<button class="${f.status === k ? 'on' : ''}" data-tab="${k}">${t}
       <span class="cnt">${k === '' ? all : c[k] || 0}</span></button>`)}`);
     const rows = data.rows, canBulk = rows.some((r) => r.actions.includes('approve') || r.actions.includes('submit'));
     if (!rows.length) { $('#list').innerHTML = String(empty('Không có chứng từ phù hợp')); $('#pager').innerHTML = ''; bulkBar(); return; }
@@ -129,10 +132,12 @@ export async function renderModule(el, [key], query) {
       const b = e.target.closest('[data-bulk]'); if (!b) return;
       if (b.dataset.bulk === 'clear') { selected.clear(); $$('.chk').forEach((x) => { x.checked = false; }); bar.remove(); return; }
       const ids = can(b.dataset.bulk);
-      const ok = await confirmBox({ title: ACTION[b.dataset.bulk].label + ' hàng loạt', message: `Thực hiện cho ${ids.length} chứng từ đã chọn?`, tone: ACTION[b.dataset.bulk].tone });
+      const needUnc = b.dataset.bulk === 'approve' && rows.some((r) => r.status === 'pay');
+      const ok = await confirmBox({ title: ACTION[b.dataset.bulk].label + ' hàng loạt', message: `Thực hiện cho ${ids.length} chứng từ đã chọn?`, tone: ACTION[b.dataset.bulk].tone,
+        input: needUnc ? 'Số UNC / mã lô chi trên ngân hàng (bắt buộc với bước Ngân quỹ chi)' : undefined });
       if (!ok) return;
       try {
-        const r = await api(`/docs/${key}/bulk`, { method: 'POST', body: { ids, action: b.dataset.bulk } });
+        const r = await api(`/docs/${key}/bulk`, { method: 'POST', body: { ids, action: b.dataset.bulk, note: ok.note } });
         toast(`Thành công ${r.done} chứng từ` + (r.failed.length ? `, lỗi ${r.failed.length}: ${r.failed[0].error}` : ''), r.failed.length ? 'err' : 'ok');
         bar.remove(); load(); refreshBadge();
       } catch (err) { showError(err); }
@@ -260,7 +265,7 @@ export function docForm(m, doc, onSaved) {
   }
   const { el, close } = overlay(String(html`
     <div class="modal-h"><div><h3>${editing ? `Sửa chứng từ #${doc.id}` : 'Lập chứng từ'} · ${m.title}</h3>
-      <div class="small muted">Lưu nháp để sửa tiếp, hoặc Lưu & gửi duyệt cho ${m.l1_label}.</div></div>
+      <div class="small muted">Lưu nháp để sửa tiếp, hoặc Lưu & gửi duyệt – hệ thống tự lập tuyến duyệt theo số tiền và loại giao dịch.</div></div>
       <div class="sp"></div><button class="btn ghost icon" data-close>${icon('x')}</button></div>
     <form class="modal-b" id="doc-form" autocomplete="off"><div class="form">
       ${m.fields.map((f) => (f.computed ? html`<div class="calc" data-f="${f.name}"><span>${f.label}</span><b data-calc="${f.name}">0</b></div>`
@@ -321,11 +326,7 @@ export function docForm(m, doc, onSaved) {
 }
 
 /** Nhãn nút duyệt theo bước hiện tại. */
-export function approveLabel(d) {
-  if (d.status === 'submitted') return 'Duyệt cấp 1';
-  if (d.status === 'l1_approved' && d.needs_director) return 'Duyệt cấp 2 (GĐ trụ cột)';
-  return 'Duyệt cuối & ghi sổ';
-}
+export function approveLabel(d) { return d.approve_label || 'Duyệt'; }
 
 // ================================================================ chi tiết chứng từ
 export async function openDoc(key, id, onChange) {
@@ -333,12 +334,7 @@ export async function openDoc(key, id, onChange) {
   const { el, close } = overlay('<div class="spinner"></div>', { kind: 'drawer' });
   let d;
   try { d = await api(`/docs/${key}/${id}`); } catch (e) { close(); return showError(e); }
-  const withDir = d.needs_director || !!d.dir_by;
-  const steps = [['Lập chứng từ', d.created_by_name, d.created_at], ['Gửi duyệt', '', d.submitted_at],
-    [`Duyệt cấp 1 · ${m.l1_label}`, d.l1_by_name, d.l1_at]];
-  if (withDir) steps.push(['Duyệt cấp 2 · GĐ công ty trụ cột', d.dir_by_name, d.dir_at]);
-  steps.push(['Admin tập đoàn duyệt cuối & ghi sổ', d.l2_by_name, d.l2_at]);
-  const done = d.status === 'posted' ? steps.length : ({ draft: 1, submitted: 2, l1_approved: 3, dir_approved: 4 }[d.status] || 0);
+  const steps = d.steps || [];
   const dirLabel = { in: 'Tiền vào', out: 'Tiền ra', move: 'Chuyển giữa 2 tài khoản', none: 'Không phát sinh tiền' }[d.direction];
 
   el.innerHTML = String(html`
@@ -346,13 +342,15 @@ export async function openDoc(key, id, onChange) {
       <div class="sp"></div><button class="btn ghost icon" data-close>${icon('x')}</button></div>
     <div class="modal-b">
       <div class="row mb">${statusBadge(d)}<span class="muted small">Công ty <b>${d.company_code || companyCode(d.company_id)}</b> · Ngày ${date(d.doc_date)}</span></div>
-      ${d.reopen_requested ? html`<div class="note">${icon('flag')}<div><b>Đề nghị mở lại:</b> ${d.reopen_note || ''}<br><span class="small">${isAdmin() ? 'Bấm "Mở lại cho sửa" để trả chứng từ về Nháp cho người lập.' : 'Đang chờ Admin tập đoàn xem xét.'}</span></div></div>` : ''}
+      ${d.reopen_requested ? html`<div class="note">${icon('flag')}<div><b>Đề nghị mở lại:</b> ${d.reopen_note || ''}<br><span class="small">${isAdmin() ? 'Bấm "Mở lại cho sửa" để trả chứng từ về Nháp cho người lập.' : 'Đang chờ Quản trị hệ thống xem xét.'}</span></div></div>` : ''}
+      ${d.route_note ? html`<div class="note">${icon('flag')}<div><b>Tuyến duyệt đặc biệt:</b> ${d.route_note}</div></div>` : ''}
+      ${d.audited_at ? html`<div class="note">${icon('check')}<div><b>KSNB đã hậu kiểm</b> · ${d.audited_by_name || ''} · ${dateTime(d.audited_at)}${d.audit_note ? html`<br><span class="small">“${d.audit_note}”</span>` : ''}</div></div>` : ''}
       ${d.status === 'cancelled' ? html`<div class="note err">${icon('ban')} Chứng từ đã bị hủy, không ghi sổ.</div>` : ''}
       <div class="amount-hero"><div><div class="small muted">${dirLabel}</div><b class="${{ in: 'in', out: 'out' }[d.direction] || ''}">${money(d.amount_view)} ₫</b></div>
         ${d.status === 'posted' ? html`<span class="badge st-posted">Đã vào sổ</span>` : html`<span class="badge st-draft">Chưa vào sổ</span>`}</div>
-      ${d.status !== 'cancelled' ? html`<div class="steps">${steps.map((s, i) => html`<div class="step ${i < done ? 'done' : i === done ? 'cur' : ''}">
-        <div class="dot">${i < done ? icon('check') : i + 1}</div>${s[0]}
-        ${i < done && s[2] ? html`<div class="small muted">${s[1] ? html`${s[1]}<br>` : ''}${dateTime(s[2])}</div>` : ''}</div>`)}</div>` : ''}
+      ${d.status !== 'cancelled' ? html`<div class="sec-t">Tuyến duyệt${d.status === 'draft' ? ' (dự kiến khi gửi)' : ''}</div><div class="steps">${steps.map((s, i) => html`<div class="step ${s.state === 'done' ? 'done' : s.state === 'cur' && d.status !== 'draft' ? 'cur' : ''}">
+        <div class="dot">${s.state === 'done' ? icon('check') : i + 1}</div>${s.label}
+        ${s.state === 'done' && s.at ? html`<div class="small muted">${s.by ? html`${s.by}<br>` : ''}${dateTime(s.at)}</div>` : ''}</div>`)}</div>` : ''}
       <div class="sec-t">Thông tin chứng từ</div>
       <dl class="dl">${m.fields.filter((f) => visible(f, d) && show(f, d) !== '').map((f) => html`<dt>${f.label}</dt><dd>${show(f, d)}</dd>`)}</dl>
       ${d.ledger?.length ? html`<div class="sec-t">Bút toán đã ghi sổ</div><div class="card"><table class="tbl"><thead><tr><th>Ngày</th><th>Tài khoản</th><th>Diễn giải</th><th class="num">Thu</th><th class="num">Chi</th></tr></thead>
@@ -378,12 +376,16 @@ export async function openDoc(key, id, onChange) {
       try { await api(`/docs/${key}/${id}`, { method: 'DELETE' }); toast('Đã xóa'); close(); onChange?.(); } catch (err) { showError(err); }
       return;
     }
-    const cfg = ACTION[a];
-    const final = d.status === 'dir_approved' || (d.status === 'l1_approved' && !d.needs_director);
-    const msg = { submit: 'Sau khi gửi, chứng từ không sửa được nữa (chỉ Admin tập đoàn mở lại được).',
-      approve: final ? 'Chứng từ sẽ được ghi sổ và cập nhật vào báo cáo.' : d.status === 'submitted' && d.needs_director ? 'Chuyển chứng từ lên Giám đốc công ty trụ cột duyệt cấp 2.'
-        : d.status === 'submitted' ? 'Chuyển chứng từ lên Admin tập đoàn duyệt cuối.' : 'Chuyển chứng từ lên Admin tập đoàn duyệt cuối.',
-      request_reopen: 'Gửi đề nghị để Admin tập đoàn mở lại chứng từ cho người lập sửa.', reopen: 'Chứng từ trở về Nháp' + (d.status === 'posted' ? ', bút toán đã ghi sổ sẽ bị hủy.' : '.'), cancel: 'Chứng từ bị hủy' + (d.status === 'posted' ? ' và bút toán bị xóa khỏi sổ.' : '.') }[a];
+    const cfg = { ...ACTION[a] };
+    const isPay = a === 'approve' && d.status === 'pay';
+    const nextStep = (d.route_steps || [])[(d.route_steps || []).indexOf(d.status) + 1];
+    const msg = { submit: 'Sau khi gửi, chứng từ không sửa được nữa. Hệ thống lập tuyến duyệt theo số tiền và loại giao dịch.',
+      approve: isPay ? 'Xác nhận lệnh chi trên ngân hàng đã thực hiện. Chứng từ sẽ được ghi sổ và cập nhật báo cáo.'
+        : nextStep ? `Chuyển chứng từ sang bước: ${state.meta.steps[nextStep]}.` : 'Chứng từ sẽ được ghi sổ và cập nhật vào báo cáo.',
+      reject: 'Chứng từ trở về Nháp để người lập sửa và gửi lại từ đầu.',
+      audit: 'Đánh dấu chứng từ đã được Kiểm soát nội bộ hậu kiểm.',
+      request_reopen: 'Gửi đề nghị để Quản trị hệ thống mở lại chứng từ cho người lập sửa.', reopen: 'Chứng từ trở về Nháp' + (d.status === 'posted' ? ', bút toán đã ghi sổ sẽ bị hủy.' : '.'), cancel: 'Chứng từ bị hủy' + (d.status === 'posted' ? ' và bút toán bị xóa khỏi sổ.' : '.') }[a];
+    if (isPay) cfg.input = 'Số UNC / mã giao dịch ngân hàng (bắt buộc)';
     const r = await confirmBox({ title: (a === 'approve' ? approveLabel(d) : cfg.label) + ` #${id}`, message: msg, ok: 'Xác nhận', tone: cfg.tone === 'warn' ? 'primary' : cfg.tone, input: cfg.input });
     if (!r) return;
     try {
@@ -395,19 +397,19 @@ export async function openDoc(key, id, onChange) {
 
 // ================================================================ hộp chờ duyệt
 export async function renderInbox(el) {
-  setTitle('Chứng từ chờ duyệt', 'Những chứng từ đang chờ bạn xử lý');
+  setTitle('Chứng từ chờ tôi xử lý', 'Những chứng từ đang ở bước thuộc quyền của bạn');
   const load = async () => {
     const rows = await api('/inbox');
     const by = {};
     rows.forEach((r) => (by[r.module] ||= { title: r.module_title, rows: [] }).rows.push(r));
     el.innerHTML = String(html`
-      <div class="page-head"><div><h2>Chứng từ chờ duyệt</h2><p>${rows.length ? `${rows.length} chứng từ đang chờ bạn xử lý` : 'Không còn chứng từ nào chờ bạn duyệt'}</p></div></div>
+      <div class="page-head"><div><h2>Chứng từ chờ tôi xử lý</h2><p>${rows.length ? `${rows.length} chứng từ đang chờ bạn xử lý` : 'Không còn chứng từ nào chờ bạn duyệt'}</p></div></div>
       ${!rows.length ? html`<div class="card">${empty('Tuyệt vời! Bạn đã xử lý hết chứng từ.', 'check')}</div>` : ''}
       ${Object.entries(by).map(([key, g]) => html`<div class="card mb" data-module="${key}">
         <div class="card-h"><h3>${g.title}</h3><span class="badge st-submitted plain">${g.rows.length}</span><div class="sp"></div>
           ${g.rows.some((r) => r.actions.includes('approve')) ? html`<button class="btn success sm" data-approve-all="${key}">${icon('check')} Duyệt tất cả (${g.rows.filter((r) => r.actions.includes('approve')).length})</button>` : ''}</div>
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Số CT</th><th>Ngày</th><th>Công ty</th><th>Nội dung</th><th class="num">Số tiền</th><th>Trạng thái</th><th>Người lập</th></tr></thead>
-        <tbody>${g.rows.map((r) => html`<tr class="click" data-id="${r.id}"><td class="muted">#${r.id}</td><td>${date(r.doc_date)}</td><td><b>${r.company_code}</b></td>
+        <tbody>${g.rows.map((r) => html`<tr class="click" data-id="${r.id}" data-st="${r.status}"><td class="muted">#${r.id}</td><td>${date(r.doc_date)}</td><td><b>${r.company_code}</b></td>
           <td class="clip">${r.summary}</td><td>${amountCell(r)}</td><td>${statusBadge(r)}</td><td class="small">${r.created_by_name}</td></tr>`)}</tbody></table></div></div>`)}`);
   };
   el.onclick = async (e) => {
@@ -415,8 +417,11 @@ export async function renderInbox(el) {
     if (all) {
       const key = all.dataset.approveAll;
       const ids = [...el.querySelectorAll(`[data-module="${key}"] tr[data-id]`)].map((t) => +t.dataset.id);
-      if (!(await confirmBox({ title: 'Duyệt tất cả', message: `Duyệt ${ids.length} chứng từ ${moduleMeta(key).title}?`, tone: 'success' }))) return;
-      const r = await api(`/docs/${key}/bulk`, { method: 'POST', body: { ids, action: 'approve' } });
+      const needUnc = [...el.querySelectorAll(`[data-module="${key}"] tr[data-st="pay"]`)].length > 0;
+      const ok = await confirmBox({ title: 'Duyệt tất cả', message: `Xử lý ${ids.length} chứng từ ${moduleMeta(key).title}?`, tone: 'success',
+        input: needUnc ? 'Số UNC / mã lô chi trên ngân hàng (bắt buộc với bước Ngân quỹ chi)' : undefined });
+      if (!ok) return;
+      const r = await api(`/docs/${key}/bulk`, { method: 'POST', body: { ids, action: 'approve', note: ok.note } });
       toast(`Đã duyệt ${r.done} chứng từ` + (r.failed.length ? `, ${r.failed.length} lỗi: ${r.failed[0].error}` : ''), r.failed.length ? 'err' : 'ok');
       load(); refreshBadge(); return;
     }

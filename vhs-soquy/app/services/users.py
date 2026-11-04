@@ -1,13 +1,13 @@
 """Quản trị tài khoản người dùng (chỉ Admin)."""
 from ..http import ApiError, now_iso
-from ..permissions import PERMISSIONS, ROLES, is_admin, require
+from ..permissions import GLOBAL_ROLES, PERMISSIONS, ROLES, is_admin, require
 from ..security import hash_password, verify_password
 
 PERM_KEYS = {k for k, _ in PERMISSIONS}
 
 
 def list_users(db, user):
-    require(is_admin(user), 'Chỉ Admin tập đoàn quản lý tài khoản')
+    require(is_admin(user), 'Chỉ Quản trị hệ thống quản lý tài khoản')
     rows = db.all('SELECT id, username, full_name, role, permissions, active, created_at FROM users ORDER BY id')
     links = db.all('SELECT user_id, company_id FROM user_companies')
     for r in rows:
@@ -33,7 +33,9 @@ def _clean(data, creating):
         err['password'] = 'Mật khẩu tối thiểu 6 ký tự'
     perms = [p for p in (data.get('permissions') or []) if p in PERM_KEYS] if role == 'staff' else []
     companies = [int(c) for c in (data.get('company_ids') or [])]
-    if role in ('staff', 'chief_accountant', 'director') and not companies:
+    if role in GLOBAL_ROLES:
+        companies = []
+    if role not in GLOBAL_ROLES and not companies:
         err['company_ids'] = 'Chọn ít nhất 1 công ty phụ trách'
     if err:
         raise ApiError(422, 'Dữ liệu chưa hợp lệ', err)
@@ -47,7 +49,7 @@ def _set_companies(db, uid, companies):
 
 
 def create_user(db, user, data):
-    require(is_admin(user), 'Chỉ Admin tập đoàn tạo tài khoản')
+    require(is_admin(user), 'Chỉ Quản trị hệ thống tạo tài khoản')
     rec, pw, companies = _clean(data, True)
     if db.scalar('SELECT COUNT(*) FROM users WHERE username=?', [rec['username']]):
         raise ApiError(409, 'Tên đăng nhập đã tồn tại', {'username': 'Đã tồn tại'})
@@ -58,10 +60,10 @@ def create_user(db, user, data):
 
 
 def update_user(db, user, uid, data):
-    require(is_admin(user), 'Chỉ Admin tập đoàn sửa tài khoản')
+    require(is_admin(user), 'Chỉ Quản trị hệ thống sửa tài khoản')
     rec, pw, companies = _clean(data, False)
     if uid == user['id'] and rec['role'] != 'admin':
-        raise ApiError(400, 'Không thể tự hạ quyền tài khoản admin đang đăng nhập')
+        raise ApiError(400, 'Không thể tự hạ quyền tài khoản quản trị đang đăng nhập')
     if db.scalar('SELECT COUNT(*) FROM users WHERE username=? AND id<>?', [rec['username'], uid]):
         raise ApiError(409, 'Tên đăng nhập đã tồn tại', {'username': 'Đã tồn tại'})
     if pw:
@@ -71,12 +73,13 @@ def update_user(db, user, uid, data):
 
 
 def delete_user(db, user, uid):
-    require(is_admin(user), 'Chỉ Admin tập đoàn xóa tài khoản')
+    require(is_admin(user), 'Chỉ Quản trị hệ thống xóa tài khoản')
     if uid == user['id']:
         raise ApiError(400, 'Không thể xóa tài khoản đang đăng nhập')
     used = 0
     for t in ('doc_cashbook', 'doc_partner_payment', 'doc_payroll', 'doc_cash_fund'):
         used += db.scalar(f'SELECT COUNT(*) FROM {t} WHERE created_by=? OR l1_by=? OR l2_by=?', [uid, uid, uid])
+    used += db.scalar('SELECT COUNT(*) FROM doc_approvals WHERE user_id=?', [uid])
     if used:
         db.update('users', uid, {'active': 0})       # đã có chứng từ → khóa thay vì xóa để giữ lịch sử
         return 'deactivated'

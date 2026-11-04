@@ -14,9 +14,11 @@ class Settings:
     TOKEN_HOURS: int = int(os.getenv('TOKEN_HOURS', '12'))
     ADMIN_USERNAME: str = os.getenv('ADMIN_USERNAME', 'admin')
     ADMIN_PASSWORD: str = os.getenv('ADMIN_PASSWORD', 'Admin@123')
-    ADMIN_FULLNAME: str = os.getenv('ADMIN_FULLNAME', 'Admin tập đoàn')
+    ADMIN_FULLNAME: str = os.getenv('ADMIN_FULLNAME', 'Quản trị hệ thống')
     SEED_LEGACY: bool = os.getenv('SEED_LEGACY', '1') == '1'   # nạp dữ liệu sổ quỹ cũ khi DB trống
     DB_POOL_SIZE: int = int(os.getenv('DB_POOL_SIZE', '10'))
+    # Ngưỡng N mặc định (đ) – khoản chi lớn hơn N cần KSNB kiểm trước + Chủ tịch duyệt; đặt riêng từng nhóm ở Dữ liệu khai báo
+    APPROVAL_THRESHOLD: int = int(os.getenv('APPROVAL_THRESHOLD', '200000000'))
     HUB_URL: str = os.getenv('HUB_URL', '')   # trống = ẩn nút về hub
     WEB_DIR: Path = BASE_DIR / 'web'
 

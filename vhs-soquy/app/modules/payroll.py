@@ -9,7 +9,7 @@ class Payroll(Module):
     table = 'doc_payroll'
     icon = 'users'
     l1_rule = 'perm'
-    l1_label = 'Kế toán duyệt lương'
+    l1_label = 'KTTH / KTV lương'
     importable = True
     import_fields = ['period', 'company_id', 'employee', 'department', 'gross', 'bonus', 'insurance', 'pit',
                      'advance_deduction', 'other_deduction', 'doc_date', 'account_id', 'doc_no', 'note']
@@ -35,7 +35,7 @@ class Payroll(Module):
         'Tài khoản Nhân sự lập bảng lương: mỗi nhân viên / kỳ lương 1 chứng từ. Thực lĩnh tự tính.',
         'Nhập nhiều nhân viên cùng lúc: bấm "Tải biểu mẫu Excel", điền mỗi nhân viên 1 dòng, rồi "Nhập từ Excel". '
         'Hệ thống kiểm tra từng dòng (công ty, TK chi trả, số tiền, trùng kỳ lương) trước khi tạo chứng từ.',
-        'Quy trình: Nhân sự lập → Kế toán duyệt lương → Giám đốc công ty trụ cột duyệt → Admin tập đoàn duyệt cuối → ghi sổ.',
+        'Quy trình: Nhân sự lập → KTTH (hoặc KTV lương) kiểm tra → CFO kiểm soát cấp 1 → Giám đốc nhóm duyệt → Ngân quỹ chi, ghi số UNC → ghi sổ.',
         'Cột Trừ tạm ứng tự giảm số tiền nhân viên đang nợ tạm ứng.',
         'BHXH / thuế khấu trừ khi nộp Nhà nước → lập ở Thanh toán đối tác.',
     ]
