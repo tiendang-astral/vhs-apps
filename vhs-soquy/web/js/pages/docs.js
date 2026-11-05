@@ -38,7 +38,7 @@ function show(f, d) {
     case 'money': return money(v);
     case 'date': return date(v);
     case 'month': return monthLabel(v);
-    case 'account': return d[f.name + '_code'] || v;
+    case 'account': case 'loan': return d[f.name + '_code'] || v;
     case 'category': return d[f.name + '_name'] || v;
     case 'company': return companyCode(v);
     case 'select': return label(v);
@@ -230,7 +230,7 @@ function inputFor(f, v) {
     case 'textarea': return html`<textarea class="input" name="${name}">${val}</textarea>`;
     case 'partner': return html`<input class="input" name="${name}" list="dl-${name}" value="${val}" autocomplete="off">
       <datalist id="dl-${name}">${partnerNames(f).map((p) => html`<option value="${p}">`)}</datalist>`;
-    case 'select': case 'account': case 'company': case 'category': case 'ref': {
+    case 'select': case 'account': case 'company': case 'category': case 'ref': case 'loan': {
       const opts = fieldOptions(f), groups = [...new Set(opts.map((o) => o.group || ''))];
       const o = (x) => html`<option value="${x.value}" ${String(x.value) === String(val) ? 'selected' : ''}>${x.label}</option>`;
       return html`<select class="input" name="${name}"><option value="">— Chọn —</option>
@@ -247,7 +247,7 @@ function readForm(form, fields) {
     const v = el.value.trim();
     if (f.type === 'money') out[f.name] = parseMoney(v);
     else if (f.type === 'number') out[f.name] = v === '' ? null : parseFloat(v);
-    else if (['account', 'company', 'category', 'ref'].includes(f.type)) out[f.name] = v ? +v : null;
+    else if (['account', 'company', 'category', 'ref', 'loan'].includes(f.type)) out[f.name] = v ? +v : null;
     else out[f.name] = v || null;
   }
   return out;
@@ -391,6 +391,7 @@ export async function openDoc(key, id, onChange) {
     try {
       await api(`/docs/${key}/${id}/${a}`, { method: 'POST', body: { note: r.note } });
       toast('Đã thực hiện: ' + cfg.label); close(); onChange?.(); refreshBadge();
+      if (key === 'loan' || key === 'cashbook') refreshOptions();
     } catch (err) { showError(err); }
   };
 }

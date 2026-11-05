@@ -29,6 +29,12 @@ export function fieldOptions(f) {
     case 'company': return myCompanies().filter((c) => c.status === 'active').map((c) => ({ value: c.id, label: `${c.code} – ${c.name}` }));
     case 'category': return o.categories.map((c) => ({ value: c.id, label: c.name, group: label(c.nature) }));
     case 'select': return (f.options || []).map((v) => ({ value: v, label: label(v) }));
+    case 'loan': {
+      const all = state.user.role !== 'staff' && !['chief_accountant', 'group_chief', 'director'].includes(state.user.role);
+      return (o.loans || []).filter((l) => (all || mine.has(l.company_id))
+        && (f.source === 'limit' ? l.kind === 'limit' : l.kind === 'loan' && l.status !== 'Đã tất toán'))
+        .map((l) => ({ value: l.id, label: `${l.code} · ${l.lender || ''}${l.status === 'Chờ giải ngân' ? ' (chờ giải ngân)' : ''}`, group: l.company_code }));
+    }
     case 'ref': return (o[f.source] || []).map((r) => ({ value: r.id, label: r.code ? `${r.code} – ${r.name}` : r.name }));
     default: return [];
   }

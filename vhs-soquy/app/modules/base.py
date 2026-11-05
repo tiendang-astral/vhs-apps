@@ -42,6 +42,17 @@ class Ctx:
         self.companies = {r['id']: r for r in db.all(
             'SELECT c.id, c.code, c.name, c.group_id, g.threshold_n FROM companies c LEFT JOIN company_groups g ON g.id=c.group_id')}
 
+    @property
+    def loans(self):
+        if not hasattr(self, '_loans'):
+            self._loans = {r['id']: r for r in self.db.all(
+                'SELECT id, code, kind, company_id, lender, contract_no, drawdown_no, amount, maturity_date, source_doc_id FROM loans')}
+        return self._loans
+
+    @property
+    def loans_by_code(self):
+        return {r['code']: r for r in self.loans.values()}
+
     def is_group_company_name(self, name):
         """Đối tác là một công ty trong hệ thống (bên liên quan)."""
         n = (name or '').strip().lower()
@@ -109,7 +120,7 @@ class Module:
                 v = to_int(v)
             elif f.type == 'number':
                 v = to_float(v)
-            elif f.type in ('account', 'category', 'company'):
+            elif f.type in ('account', 'category', 'company', 'loan'):
                 v = to_int(v)
             elif f.type == 'month':
                 v = (str(v)[:7] + '-01') if v else None

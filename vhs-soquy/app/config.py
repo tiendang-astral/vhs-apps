@@ -7,7 +7,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings:
-    APP_NAME: str = os.getenv('APP_NAME', 'QUẢN TRỊ TÀI CHÍNH TIMORI GROUP')
+    # Tên phần mềm cố định theo quyết định của Chủ tịch (11/2026) – không đổi qua biến môi trường
+    APP_NAME: str = 'QUẢN TRỊ TÀI CHÍNH TIMORI GROUP'
     # postgresql://user:pass@host:5432/db  hoặc  sqlite:///data/soquy.db (chạy thử)
     DATABASE_URL: str = os.getenv('DATABASE_URL', f'sqlite:///{BASE_DIR / "data" / "soquy.db"}')
     SECRET_KEY: str = os.getenv('SECRET_KEY') or ''
@@ -15,7 +16,7 @@ class Settings:
     ADMIN_USERNAME: str = os.getenv('ADMIN_USERNAME', 'admin')
     ADMIN_PASSWORD: str = os.getenv('ADMIN_PASSWORD', 'Admin@123')
     ADMIN_FULLNAME: str = os.getenv('ADMIN_FULLNAME', 'Quản trị hệ thống')
-    SEED_LEGACY: bool = os.getenv('SEED_LEGACY', '1') == '1'   # nạp dữ liệu sổ quỹ cũ khi DB trống
+    SEED_LEGACY: bool = os.getenv('SEED_LEGACY', '0') == '1'   # mặc định KHÔNG nạp dữ liệu mẫu cũ (quyết định 05/11/2026)
     DB_POOL_SIZE: int = int(os.getenv('DB_POOL_SIZE', '10'))
     # Ngưỡng N mặc định (đ) – khoản chi lớn hơn N cần KSNB kiểm trước + Chủ tịch duyệt; đặt riêng từng nhóm ở Dữ liệu khai báo
     APPROVAL_THRESHOLD: int = int(os.getenv('APPROVAL_THRESHOLD', '200000000'))

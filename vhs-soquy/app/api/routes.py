@@ -13,6 +13,7 @@ from ..permissions import (GLOBAL_ROLES, PERMISSIONS, ROLES, APPROVER_ROLES, can
                            can_view_dashboard, can_view_module, can_view_summary, is_admin, is_global, require)
 from ..security import make_token, verify_password
 from ..services import guide as guide_svc
+from ..services import loans as ls
 from ..services import importer
 from ..services import masterdata as md
 from ..services import reports as rp
@@ -34,6 +35,8 @@ def nav_for(u):
                           'can_create': can_create(u, m)})
     if is_admin(u) or u['role'] in APPROVER_ROLES or any(can_l1(u, m) for m in REGISTRY.values()):
         items.append({'key': 'inbox', 'title': 'Đề nghị mở lại' if is_admin(u) else 'Chứng từ chờ tôi xử lý', 'group': 'Nghiệp vụ'})
+    if can_view_loans(u):
+        items.insert(1 if can_view_dashboard(u) else 0, {'key': 'loans', 'title': 'Khoản vay', 'group': 'Tổng quan'})
     items += [{'key': 'ledger-day', 'title': 'Chi tiết theo ngày', 'group': 'Báo cáo'},
               {'key': 'ledger-month', 'title': 'Chi tiết theo tháng', 'group': 'Báo cáo'}]
     if can_view_summary(u):
@@ -314,6 +317,39 @@ def guide(request):
     return ok(guide_svc.guide())
 
 
+# ---------------------------------------------------------------- khoản vay
+def can_view_loans(u):
+    return u['role'] != 'staff' or 'loan.create' in u['perms'] or 'cashbook.create' in u['perms']
+
+
+def loans_list(request):
+    with get_db() as db:
+        u = current_user(request, db)
+        require(can_view_loans(u))
+        return ok(ls.list_loans(db, u, q_int(request, 'company_id')))
+
+
+def loans_dashboard(request):
+    with get_db() as db:
+        u = current_user(request, db)
+        require(can_view_loans(u))
+        return ok(ls.dashboard(db, u))
+
+
+def loans_schedule(request):
+    with get_db() as db:
+        u = current_user(request, db)
+        require(can_view_loans(u))
+        return ok(ls.group_schedule(db, u, min(q_int(request, 'days', 90), 400)))
+
+
+def loans_get(request):
+    with get_db() as db:
+        u = current_user(request, db)
+        require(can_view_loans(u))
+        return ok(ls.detail(db, u, int(request.path_params['id'])))
+
+
 def health(request):
     with get_db() as db:
         db.scalar('SELECT 1')
@@ -328,6 +364,10 @@ ROUTES = [
     Route('/api/meta', meta),
     Route('/api/options', options),
     Route('/api/inbox', inbox),
+    Route('/api/loans', loans_list),
+    Route('/api/loans/dashboard', loans_dashboard),
+    Route('/api/loans/schedule', loans_schedule),
+    Route('/api/loans/{id:int}', loans_get),
     Route('/api/docs/{module}', docs_list),
     Route('/api/docs/{module}', docs_create, methods=['POST']),
     Route('/api/docs/{module}/bulk', docs_bulk, methods=['POST']),

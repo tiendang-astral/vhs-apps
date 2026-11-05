@@ -77,7 +77,7 @@ def delete_user(db, user, uid):
     if uid == user['id']:
         raise ApiError(400, 'Không thể xóa tài khoản đang đăng nhập')
     used = 0
-    for t in ('doc_cashbook', 'doc_partner_payment', 'doc_payroll', 'doc_cash_fund'):
+    for t in ('doc_cashbook', 'doc_partner_payment', 'doc_payroll', 'doc_cash_fund', 'doc_loan'):
         used += db.scalar(f'SELECT COUNT(*) FROM {t} WHERE created_by=? OR l1_by=? OR l2_by=?', [uid, uid, uid])
     used += db.scalar('SELECT COUNT(*) FROM doc_approvals WHERE user_id=?', [uid])
     if used:

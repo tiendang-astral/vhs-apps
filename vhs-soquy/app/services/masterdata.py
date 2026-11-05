@@ -74,7 +74,13 @@ def options(db):
                            'JOIN companies c ON c.id=a.company_id ORDER BY c.id, a.kind, a.code'),
         'categories': db.all('SELECT id, name, nature FROM categories ORDER BY id'),
         'partners': db.all('SELECT id, name, type, company_id FROM partners ORDER BY name'),
+        'loans': _loan_options(db),
     }
+
+
+def _loan_options(db):
+    from . import loans as ls
+    return ls.options(db)
 
 
 def _clean(table, data):

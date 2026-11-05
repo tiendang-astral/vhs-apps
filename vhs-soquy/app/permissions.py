@@ -34,6 +34,7 @@ PERMISSIONS = [
     ('cash_fund.create', 'KTV – lập Quỹ TM & tạm ứng'),
     ('payroll.create', 'Nhân sự – lập Thanh toán lương'),
     ('payroll.approve', 'KTV lương – kiểm tra bảng lương (thay KTTH)'),
+    ('loan.create', 'Lập hồ sơ vay, đối chiếu dư nợ'),
 ]
 
 
@@ -59,6 +60,8 @@ def require_scope(u, company_id):
 
 
 def can_create(u, module):
+    if module.key == 'loan' and u['role'] == 'treasury':      # Ngân quỹ lập hồ sơ vay
+        return True
     return f'{module.key}.create' in u['perms']
 
 

@@ -12,6 +12,12 @@ GENERAL = [
         'Giai đoạn 2 có Kế toán trưởng nhóm: KTT nhóm kiểm soát cấp 1 khoản đến N; khoản trên N và giao dịch đặc biệt vẫn do CFO.',
         'Công ty chưa có tài khoản Giám đốc nhóm: bước Giám đốc nhóm được thay bằng Chủ tịch.',
     ]},
+    {'title': 'Khoản vay (Chủ tịch duyệt cuối mọi tuyến)', 'items': [
+        'Mọi thay đổi về khoản vay đi qua Hồ sơ vay do Ngân quỹ lập: hạn mức, hợp đồng / khế ước, gia hạn – cơ cấu, tài sản bảo đảm: KTTH → CFO → KSNB → Chủ tịch; đổi lãi suất, đối chiếu dư nợ: KTTH → CFO → Chủ tịch.',
+        'Giải ngân, trả gốc, trả lãi lập ở Thu Chi & Vay nợ, bắt buộc chọn Khoản vay đã duyệt. Giải ngân: KTTH → CFO → Chủ tịch. Trả nợ: KTTH → CFO → Giám đốc nhóm → Chủ tịch → Ngân quỹ chi.',
+        'Trả trước hạn = trả toàn bộ khế ước trước ngày đáo hạn: thêm bước KSNB kiểm tra trước.',
+        'Dư nợ không nhập tay: dư nợ = giải ngân − trả gốc đã ghi sổ. Trang Khoản vay có Dashboard, lịch trả nợ 90 ngày, cảnh báo, bảo lãnh chéo.',
+    ]},
     {'title': 'Quy tắc kiểm soát', 'items': [
         'Người lập không tự duyệt chứng từ của mình. Mỗi người chỉ duyệt một bước trên cùng một chứng từ.',
         'Người duyệt thấy sai: bấm "Trả lại" và ghi lý do – chứng từ về Nháp cho người lập sửa và gửi lại từ đầu.',

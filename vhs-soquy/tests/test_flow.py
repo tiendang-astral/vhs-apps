@@ -12,6 +12,7 @@ import requests
 
 ROOT = Path(__file__).resolve().parent.parent
 PASS, FAIL = [], []
+RESET_CHECK = []
 
 
 def check(name, cond, info=''):
@@ -58,6 +59,23 @@ def main():
             except requests.ConnectionError:
                 time.sleep(0.2)
         run(base)
+        srv.terminate(); srv.wait()
+        print('20. Xóa dữ liệu mẫu cũ (app.reset_data)')
+        r = subprocess.run([sys.executable, '-m', 'app.reset_data', '--yes'], cwd=ROOT, env=env, capture_output=True, text=True)
+        check('Lệnh xóa dữ liệu chạy được', r.returncode == 0, r.stderr[-300:])
+        srv = subprocess.Popen([sys.executable, '-m', 'uvicorn', 'app.main:app', '--port', str(p)], cwd=ROOT, env=env,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for _ in range(100):
+            try:
+                requests.get(base + '/api/health', timeout=1); break
+            except requests.ConnectionError:
+                time.sleep(0.2)
+        a = Client(base).login('admin', 'Admin@123')
+        o = a.get('/api/options')[1]
+        check('Sau khi xóa: không còn tài khoản NH, khoản vay', not o['accounts'] and not o['loans'], (len(o['accounts']), len(o['loans'])))
+        check('Sau khi xóa: giữ công ty, hạng mục, người dùng', len(o['companies']) == 12 and o['categories'] and len(a.get('/api/users')[1]) > 5)
+        check('Sau khi xóa: không còn chứng từ', a.get('/api/docs/cashbook')[1]['total'] == 0)
+        check('Kiểm soát hạch toán khớp sau khi xóa', a.get('/api/reports/control')[1]['ok'])
     finally:
         srv.terminate()
     print(f'\n{len(PASS)} đạt, {len(FAIL)} lỗi')
@@ -164,12 +182,12 @@ def run(base):
     check('Chủ tịch duyệt', ct.post(f'/api/docs/partner_payment/{sid}/approve')[1].get('result') == 'pay')
     s, j = kt1.post('/api/docs/partner_payment', dict(pp, amount=10_000_000, special_type='NCC mới', _submit=True))
     check('Chọn NCC mới → có Chủ tịch', 'chair' in doc_of('partner_payment', j['id'])['route_steps'])
-    s, j = kt1.post('/api/docs/cashbook', dict(doc_date='2026-06-10', kind='Giải ngân vay ngân hàng', account_id=acc['MB-VHS'], amount=500_000_000,
-                                               counterparty='MB', contract_no='HDV-01', _submit=True)); lid = j['id']
-    check('Vay = đặc biệt, không có bước chi', doc_of('cashbook', lid)['route_steps'] == ['chk', 'ctl', 'pre', 'chair'])
+    s, j = kt1.post('/api/docs/cashbook', dict(doc_date='2026-06-10', kind='Nhận góp vốn', account_id=acc['MB-VHS'], amount=500_000_000,
+                                               counterparty='Cổ đông A', _submit=True)); lid = j['id']
+    check('Góp vốn = đặc biệt, không có bước chi', doc_of('cashbook', lid)['route_steps'] == ['chk', 'ctl', 'pre', 'chair'])
     for c_ in (ktth, cfo, ksnb):
         c_.post(f'/api/docs/cashbook/{lid}/approve')
-    check('Chủ tịch duyệt khoản vay → ghi sổ', ct.post(f'/api/docs/cashbook/{lid}/approve')[1].get('result') == 'posted')
+    check('Chủ tịch duyệt góp vốn → ghi sổ', ct.post(f'/api/docs/cashbook/{lid}/approve')[1].get('result') == 'posted')
 
     print('7. Trả lại, mở lại, hủy')
     s, j = kt1.post('/api/docs/partner_payment', dict(pp, amount=7_000_000, doc_date='2026-06-11', _submit=True)); rid = j['id']
@@ -303,10 +321,87 @@ def run(base):
     check('CFO không mở khóa', cfo.post('/api/master/partners/unlock', {'ids': [mid]})[0] == 403)
     check('Quản trị mở khóa', admin.post('/api/master/partners/unlock', {'ids': [mid]})[0] == 200)
 
-    print('18. Kiểm soát cuối')
+    print('18. Phân hệ Khoản vay')
+    def ok_(c, mod, i, note=None):
+        return c.post(f'/api/docs/{mod}/{i}/approve', {'note': note} if note else {})
+    loan = dict(doc_date='2026-06-01', kind='Hợp đồng vay / khế ước', company_id=co['VHS'], code='vay-t1', lender='VPBank',
+                lender_type='Ngân hàng', contract_no='HDTD-01', drawdown_no='KU-01', term='Ngắn hạn', amount=1_000_000_000,
+                start_date='2026-06-10', maturity_date='2027-06-10', rate=9.5, rate_type='Thả nổi', interest_day=25,
+                repay_method='Trả gốc đều hằng tháng', description='Vốn lưu động', _submit=True)
+    check('KTV không lập được hồ sơ vay', kt1.post('/api/docs/loan', loan)[0] == 403)
+    s, j = nq.post('/api/docs/loan', loan); lid = j.get('id')
+    check('Ngân quỹ lập hồ sơ vay', s == 201, j)
+    check('Tuyến hồ sơ vay: KTTH → CFO → KSNB → Chủ tịch', doc_of('loan', lid)['route_steps'] == ['chk', 'ctl', 'pre', 'chair'], doc_of('loan', lid)['route_steps'])
+    gn = dict(doc_date='2026-06-10', kind='Giải ngân vay ngân hàng', account_id=acc['MB-VHS'], amount=600_000_000, description='Giải ngân KU-01')
+    check('Chưa duyệt hồ sơ → chưa giải ngân được', kt1.post('/api/docs/cashbook', dict(gn, loan_id=1))[0] == 422)
+    for c_ in (ktth, cfo, ksnb):
+        ok_(c_, 'loan', lid)
+    check('Chủ tịch duyệt cuối hồ sơ vay', ok_(ct, 'loan', lid)[1].get('result') == 'posted')
+    L = {x['code']: x for x in cfo.get('/api/loans')[1]}
+    check('Khoản vay xuất hiện, chờ giải ngân', 'VAY-T1' in L and L['VAY-T1']['status'] == 'Chờ giải ngân', list(L))
+    vid = L['VAY-T1']['id']
+    check('Giải ngân không chọn khoản vay bị chặn', kt1.post('/api/docs/cashbook', gn)[0] == 422)
+    s, j = kt1.post('/api/docs/cashbook', dict(gn, loan_id=vid, _submit=True)); g1 = j.get('id')
+    check('Lập chứng từ giải ngân', s == 201, j)
+    gd_ = doc_of('cashbook', g1)
+    check('Tuyến giải ngân: KTTH → CFO → Chủ tịch', gd_['route_steps'] == ['chk', 'ctl', 'chair'], gd_['route_steps'])
+    check('Số HĐ tự lấy theo khoản vay', gd_['contract_no'] == 'HDTD-01 / KU-01', gd_['contract_no'])
+    ok_(ktth, 'cashbook', g1); ok_(cfo, 'cashbook', g1)
+    check('Chủ tịch duyệt cuối giải ngân → ghi sổ', ok_(ct, 'cashbook', g1)[1].get('result') == 'posted')
+    ln = cfo.get(f'/api/loans/{vid}')[1]
+    check('Dư nợ 600 triệu, Đang vay', ln['outstanding'] == 600_000_000 and ln['status'] == 'Đang vay', (ln['outstanding'], ln['status']))
+    check('Có lịch trả nợ đều hằng tháng', len(ln['schedule']) >= 6 and ln['schedule'][-1]['balance_after'] == 0, len(ln['schedule']))
+    check('Giải ngân vượt số tiền vay bị chặn', kt1.post('/api/docs/cashbook', dict(gn, loan_id=vid, amount=500_000_000))[0] == 422)
+    tg = dict(doc_date='2026-07-25', kind='Trả nợ gốc vay', account_id=acc['MB-VHS'], loan_id=vid, amount=100_000_000, _submit=True)
+    s, j = kt1.post('/api/docs/cashbook', tg); t1 = j.get('id')
+    check('Tuyến trả nợ đúng lịch: KTTH → CFO → GĐ nhóm → Chủ tịch → Ngân quỹ', doc_of('cashbook', t1)['route_steps'] == ['chk', 'ctl', 'dir', 'chair', 'pay'], doc_of('cashbook', t1)['route_steps'])
+    for c_ in (ktth, cfo, gd, ct):
+        ok_(c_, 'cashbook', t1)
+    check('Ngân quỹ chi → ghi sổ', ok_(nq, 'cashbook', t1, 'UNC-VAY-01')[1].get('result') == 'posted')
+    check('Dư nợ còn 500 triệu', cfo.get(f'/api/loans/{vid}')[1]['outstanding'] == 500_000_000)
+    check('Trả gốc vượt dư nợ bị chặn', kt1.post('/api/docs/cashbook', dict(tg, amount=600_000_000))[0] == 422)
+    s, j = kt1.post('/api/docs/cashbook', dict(tg, amount=300_000_000, doc_date='2026-08-25', _submit=False))
+    check('Trả một phần trước hạn → tuyến thường', 'pre' not in doc_of('cashbook', j['id'])['route_steps'])
+    s, j = kt1.post('/api/docs/cashbook', dict(tg, amount=500_000_000, doc_date='2026-08-25', _submit=False))
+    check('Trả toàn bộ trước hạn → thêm KSNB', doc_of('cashbook', j['id'])['route_steps'] == ['chk', 'ctl', 'pre', 'chair', 'pay'], doc_of('cashbook', j['id'])['route_steps'])
+    check('Lý do trả trước hạn', 'trước hạn' in (doc_of('cashbook', j['id'])['route_note'] or ''))
+    s, j = kt1.post('/api/docs/cashbook', dict(doc_date='2026-07-25', kind='Trả lãi vay', account_id=acc['MB-VHS'], loan_id=vid, amount=4_000_000, _submit=True))
+    check('Trả lãi có Chủ tịch duyệt cuối', 'chair' in doc_of('cashbook', j['id'])['route_steps'])
+    s, j = nq.post('/api/docs/loan', dict(doc_date='2026-08-01', kind='Điều chỉnh lãi suất', loan_id=vid, new_rate=10.2, effective_date='2026-08-01', _submit=True)); r1 = j.get('id')
+    check('Đổi lãi suất: KTTH → CFO → Chủ tịch', doc_of('loan', r1)['route_steps'] == ['chk', 'ctl', 'chair'], j)
+    for c_ in (ktth, cfo, ct):
+        ok_(c_, 'loan', r1)
+    check('Lãi suất khoản vay cập nhật 10,2%', cfo.get(f'/api/loans/{vid}')[1]['rate'] == 10.2)
+    s, j = nq.post('/api/docs/loan', dict(doc_date='2026-07-02', kind='Đối chiếu dư nợ', loan_id=vid, period='2026-06', bank_balance=600_000_000, _submit=True)); r2 = j.get('id')
+    for c_ in (ktth, cfo, ct):
+        ok_(c_, 'loan', r2)
+    rc = cfo.get(f'/api/loans/{vid}')[1]['recons']
+    check('Đối chiếu dư nợ tháng 6 khớp', rc and rc[0]['diff'] == 0 and rc[0]['book_balance'] == 600_000_000, rc)
+    s, j = nq.post('/api/docs/loan', dict(doc_date='2026-06-01', kind='Tài sản bảo đảm / bảo lãnh', loan_id=vid, collateral='Bảo lãnh của Đức Phát',
+                                          owner_company_id=co['DP'], collateral_value=1_000_000_000, insurance_expiry='2027-06-01', _submit=True)); r3 = j.get('id')
+    for c_ in (ktth, cfo, ksnb, ct):
+        ok_(c_, 'loan', r3)
+    dsh = ct.get('/api/loans/dashboard')[1]
+    check('Dashboard vay: tổng dư nợ 500 triệu, khớp', dsh['total'] == 500_000_000 and dsh['check_ok'], (dsh['total'], dsh['check_ok']))
+    check('Bảo lãnh chéo DP cho VHS hiện trên Dashboard', any(c['owner'] == 'DP' and c['borrower'] == 'VHS' for c in dsh['cross_guarantees']))
+    check('Lịch trả nợ toàn Group có dữ liệu', 'rows' in dsh['schedule'])
+    check('Không mở lại được hồ sơ gốc khi đã có giao dịch', admin.post(f'/api/docs/loan/{lid}/reopen')[0] == 409)
+    s, j = nq.post('/api/docs/loan', dict(doc_date='2026-06-01', kind='Hạn mức tín dụng', company_id=co['VHS'], code='HM-VHS-TCB', lender='Techcombank',
+                                          lender_type='Ngân hàng', contract_no='HM-01', limit_amount=2_000_000_000, start_date='2026-06-01', maturity_date='2027-06-01', _submit=True)); h1 = j.get('id')
+    for c_ in (ktth, cfo, ksnb, ct):
+        ok_(c_, 'loan', h1)
+    hm = next(x for x in cfo.get('/api/loans')[1] if x['code'] == 'HM-VHS-TCB')
+    check('Hạn mức được ghi nhận, còn lại 2 tỷ', hm['kind'] == 'limit' and hm['available'] == 2_000_000_000, hm)
+    check('Mã khoản vay trùng bị chặn', nq.post('/api/docs/loan', dict(loan, code='VAY-T1', _submit=False))[0] == 422)
+    check('KTV công ty khác không thấy khoản vay VHS', all(x['company_code'] != 'VHS' for x in kt2.get('/api/loans')[1]))
+    check('Giám đốc nhóm VHS thấy khoản vay', any(x['code'] == 'VAY-T1' for x in gd.get('/api/loans')[1]))
+    check('Khoản vay có trong danh sách chọn', any(x['code'] == 'VAY-T1' for x in kt1.get('/api/options')[1]['loans']))
+
+    print('19. Kiểm soát cuối')
     check('Kiểm soát hạch toán vẫn khớp', admin.get('/api/reports/control')[1]['ok'])
     uid = next(u['id'] for u in admin.get('/api/users')[1] if u['username'] == 'cfo')
     check('Xóa user đã duyệt chứng từ → khóa', admin.delete(f'/api/users/{uid}')[1]['result'] == 'deactivated')
+    RESET_CHECK.append(admin)
 
 
 if __name__ == '__main__':

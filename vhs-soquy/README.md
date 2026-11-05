@@ -8,8 +8,8 @@ Khi bước cuối của tuyến hoàn tất, hệ thống tự ghi sổ và c�
 
 - **Backend:** Python 3.11+, Starlette và Uvicorn. Dùng PostgreSQL khi chạy thật, SQLite khi chạy thử.
 - **Frontend:** HTML/CSS/JavaScript thuần (ES modules), không cần bước build. Biểu đồ vẽ bằng SVG.
-- **Kiểm thử:** `tests/test_flow.py` có 113 bài kiểm thử theo luồng duyệt mới, đạt 113/113 trên cả SQLite và PostgreSQL 16.
-- **Dữ liệu cũ:** nạp sẵn 441 giao dịch từ file Excel (T4–T5/2026). Tổng số dư sau khi nạp là **863.233.490 đ**, khớp với file Excel.
+- **Kiểm thử:** `tests/test_flow.py` có 152 bài kiểm thử (luồng duyệt mới, phân hệ Khoản vay, xóa dữ liệu mẫu), đạt 152/152 trên cả SQLite và PostgreSQL 16.
+- **Dữ liệu:** mặc định bắt đầu trắng, kế toán nhập liệu mới. Dữ liệu mẫu Excel cũ (441 giao dịch) chỉ nạp khi đặt `SEED_LEGACY=1` để chạy thử.
 - **Cập nhật từ bản cũ:** khi khởi động, chương trình tự thêm các cột mới vào CSDL đã có, không cần chạy lệnh nâng cấp.
 
 ---
@@ -24,7 +24,7 @@ cd /opt/so_quy_app
 cp .env.example .env
 nano .env          # đổi POSTGRES_PASSWORD, SECRET_KEY, ADMIN_PASSWORD
 
-# 2. Khởi động (lần đầu sẽ tự tạo bảng, tạo tài khoản admin, nạp dữ liệu Excel cũ)
+# 2. Khởi động (lần đầu sẽ tự tạo bảng, tài khoản admin và cơ cấu tập đoàn; không nạp dữ liệu mẫu)
 docker compose up -d --build
 
 # 3. Kiểm tra
@@ -89,10 +89,9 @@ TEST_DATABASE_URL=postgresql://user:pass@host/db_trong python tests/test_flow.py
 |---|---|---|
 | `DATABASE_URL` | `postgresql://user:pass@host:5432/db` hoặc `sqlite:///path.db` | `sqlite:///data/soquy.db` |
 | `SECRET_KEY` | Chuỗi bí mật dùng để ký phiên đăng nhập, ≥ 32 ký tự | tự sinh và lưu vào `data/.secret_key` |
-| `APP_NAME` | Tên hiển thị của ứng dụng | `QUẢN TRỊ TÀI CHÍNH TIMORI GROUP` |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_FULLNAME` | Tài khoản Quản trị hệ thống, chỉ được tạo khi CSDL còn trống | `admin` / `Admin@123` |
 | `APPROVAL_THRESHOLD` | Ngưỡng N mặc định (đ) khi nhóm chưa đặt ngưỡng riêng | `200000000` |
-| `SEED_LEGACY` | `1` = nạp dữ liệu sổ quỹ Excel cũ khi CSDL trống | `1` |
+| `SEED_LEGACY` | `1` = nạp dữ liệu mẫu Excel cũ khi CSDL trống (chỉ chạy thử) | `0` |
 | `TOKEN_HOURS` | Số giờ một phiên đăng nhập còn hiệu lực | `12` |
 | `DB_POOL_SIZE` | Số kết nối CSDL giữ sẵn | `10` |
 
@@ -139,6 +138,24 @@ Khi khởi động, chương trình tự thêm cột / bảng mới và chuyển
 
 **Dữ liệu khai báo**: thêm / sửa / xóa khi còn Nháp; sau khi **Khóa (Submit)** chỉ Quản trị hệ thống mở khóa được.
 
+### Phân hệ Khoản vay (phiên bản 3 – 11/2026)
+
+- **Hồ sơ vay** (nghiệp vụ `loan`, Ngân quỹ lập): Hạn mức tín dụng, Hợp đồng vay / khế ước, Gia hạn / cơ cấu nợ, Tài sản bảo đảm / bảo lãnh → KTTH → CFO → KSNB → **Chủ tịch duyệt cuối**; Điều chỉnh lãi suất, Đối chiếu dư nợ → KTTH → CFO → **Chủ tịch**. Hồ sơ được duyệt tự cập nhật sổ khoản vay.
+- **Giải ngân / trả gốc / trả lãi** lập ở Thu Chi & Vay nợ, bắt buộc chọn khoản vay: giải ngân KTTH → CFO → Chủ tịch; trả nợ KTTH → CFO → Giám đốc nhóm → Chủ tịch → Ngân quỹ chi; **trả trước hạn toàn bộ khế ước** thêm KSNB. Chặn giải ngân vượt số tiền vay, trả gốc vượt dư nợ.
+- **Dư nợ** = giải ngân − trả gốc đã ghi sổ (không sửa tay). Trang *Khoản vay*: Dashboard, danh sách khoản vay / hạn mức, lịch trả nợ 90 ngày, cảnh báo (thiếu lãi suất, lãi > 10%, đến hạn 90/30/7 ngày, quá hạn, chưa đối chiếu tháng, bảo hiểm TSĐB), bảo lãnh chéo giữa các công ty.
+- API: `GET /api/loans`, `/api/loans/dashboard`, `/api/loans/schedule?days=90`, `/api/loans/{id}`.
+
+### Xóa dữ liệu mẫu cũ
+
+Mặc định (`SEED_LEGACY=0`) cài mới chỉ tạo cơ cấu tập đoàn (nhóm, công ty, ngân hàng, hạng mục), không nạp dữ liệu Excel cũ. Với CSDL đang chạy đã có dữ liệu mẫu, **sao lưu trước** rồi chạy:
+
+```bash
+docker compose exec app python -m app.reset_data --yes          # xóa chứng từ, sổ, khoản vay, TK NH/quỹ, đối tác
+docker compose exec app python -m app.reset_data --yes --keep-master   # giữ TK NH/quỹ và đối tác
+```
+
+Giữ nguyên: tài khoản người dùng, công ty, nhóm (ngưỡng N), ngân hàng, hạng mục.
+
 ## 5. Cấu trúc mã nguồn
 
 ```
@@ -149,11 +166,12 @@ app/
   security.py          mã hóa mật khẩu (PBKDF2), JWT
   permissions.py       vai trò, quyền, phạm vi công ty
   modules/             MỖI NGHIỆP VỤ = 1 FILE (trường nhập, kiểm tra, cách ghi sổ)
-    cashbook.py  partner_payment.py  payroll.py  cash_fund.py
+    cashbook.py  partner_payment.py  payroll.py  cash_fund.py  loan.py (hồ sơ vay)
   services/
     workflow.py        tuyến duyệt (build_route), lập, gửi, duyệt, trả lại, chi & ghi sổ, hậu kiểm, mở lại, hủy
     masterdata.py      dữ liệu khai báo, khóa / mở khóa
     reports.py         sổ chi tiết, tổng hợp, dashboard, kiểm soát
+    loans.py           sổ khoản vay, dư nợ, lịch trả nợ, cảnh báo, Dashboard vay
     users.py  guide.py
   api/routes.py        REST API
   seed/                tạo admin, nạp dữ liệu Excel cũ
@@ -196,4 +214,4 @@ GET|POST /api/users    PUT|DELETE /api/users/{id}
 GET  /api/routes       danh sách toàn bộ endpoint
 ```
 
-`module` nhận một trong các giá trị `cashbook`, `partner_payment`, `payroll`, `cash_fund`. `table` nhận một trong các giá trị `companies`, `company_groups`, `banks`, `accounts`, `categories`, `partners`.
+`module` nhận một trong các giá trị `cashbook`, `partner_payment`, `payroll`, `cash_fund`, `loan`. `table` nhận một trong các giá trị `companies`, `company_groups`, `banks`, `accounts`, `categories`, `partners`.

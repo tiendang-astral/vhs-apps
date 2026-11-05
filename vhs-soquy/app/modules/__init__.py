@@ -3,8 +3,9 @@ from .cashbook import Cashbook
 from .partner_payment import PartnerPayment
 from .payroll import Payroll
 from .cash_fund import CashFund
+from .loan import LoanDossier
 
-REGISTRY = {m.key: m for m in (Cashbook(), PartnerPayment(), Payroll(), CashFund())}
+REGISTRY = {m.key: m for m in (Cashbook(), PartnerPayment(), Payroll(), CashFund(), LoanDossier())}
 
 
 def get_module(key):

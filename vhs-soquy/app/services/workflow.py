@@ -45,6 +45,10 @@ def threshold(ctx, company_id):
 
 def build_route(m, d, ctx):
     """Tuyến duyệt của chứng từ: (danh sách bước, ghi chú lý do)."""
+    if hasattr(m, 'custom_route'):
+        r = m.custom_route(d, ctx)
+        if r:
+            return r
     amount, direction = m.amount(d) or 0, m.direction(d)
     special = m.special(d, ctx)
     n = threshold(ctx, d.get('company_id'))
@@ -126,6 +130,8 @@ def decorate(m, d, ctx, users=None, apps=None):
     for f in m.fields:
         if f.type == 'account' and d.get(f.name):
             d[f.name + '_code'] = ctx.accounts.get(d[f.name], {}).get('code')
+        if f.type == 'loan' and d.get(f.name):
+            d[f.name + '_code'] = ctx.loans.get(d[f.name], {}).get('code')
         if f.type == 'category' and d.get(f.name):
             d[f.name + '_name'] = ctx.cat_by_id.get(d[f.name], {}).get('name')
         if f.computed:
@@ -263,6 +269,8 @@ def get_doc(db, user, m, doc_id):
 def _prepare(db, user, m, data):
     ctx = Ctx(db)
     doc = m.normalize(data)
+    if hasattr(m, 'enrich'):
+        m.enrich(doc, ctx)
     errors = m.validate(doc, ctx)
     company = m.company_of(doc, ctx)
     if not errors and not company:
@@ -355,6 +363,8 @@ def approve(db, user, m, doc_id, note=None):
     post(db, m, dict(d, **upd), ctx)
     upd.update(status='posted', l2_by=user['id'], l2_at=now_iso(), posted_at=now_iso(), reopen_requested=0)
     db.update(m.table, doc_id, upd)
+    if hasattr(m, 'on_posted'):
+        m.on_posted(db, load(db, m, doc_id), ctx, user)
     log(db, m, doc_id, f'{STEPS[st][0]} – đã ghi sổ', user, note)
     return 'posted'
 
@@ -404,6 +414,8 @@ def reopen(db, user, m, doc_id, note=None):
     require(is_admin(user), 'Chỉ Quản trị hệ thống được mở lại chứng từ')
     d = load(db, m, doc_id)
     require(d['status'] != 'draft', 'Chứng từ đang là Nháp')
+    if d['status'] == 'posted' and hasattr(m, 'on_unposted'):
+        m.on_unposted(db, d, Ctx(db), user)
     db.execute('DELETE FROM ledger_entries WHERE module=? AND doc_id=?', [m.key, doc_id])
     db.execute('DELETE FROM doc_approvals WHERE module=? AND doc_id=?', [m.key, doc_id])
     db.update(m.table, doc_id, dict(status='draft', reopen_requested=0, l1_by=None, l1_at=None, dir_by=None, dir_at=None,
@@ -415,6 +427,8 @@ def cancel(db, user, m, doc_id, note=None):
     require(is_admin(user), 'Chỉ Quản trị hệ thống được hủy chứng từ')
     d = load(db, m, doc_id)
     require(d['status'] != 'cancelled', 'Chứng từ đã hủy')
+    if d['status'] == 'posted' and hasattr(m, 'on_unposted'):
+        m.on_unposted(db, d, Ctx(db), user)
     db.execute('DELETE FROM ledger_entries WHERE module=? AND doc_id=?', [m.key, doc_id])
     db.update(m.table, doc_id, dict(status='cancelled', reopen_requested=0, posted_at=None))
     log(db, m, doc_id, 'Hủy chứng từ', user, note)

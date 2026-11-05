@@ -173,6 +173,20 @@ SCHEMA = [
     f"""CREATE TABLE IF NOT EXISTS doc_cash_fund ({DOC_COMMON}
         kind TEXT, from_account_id BIGINT REFERENCES accounts(id), to_account_id BIGINT REFERENCES accounts(id), amount BIGINT,
         person TEXT, description TEXT, category_id BIGINT REFERENCES categories(id), doc_no TEXT, note TEXT)""",
+    f"""CREATE TABLE IF NOT EXISTS doc_loan ({DOC_COMMON}
+        kind TEXT, loan_id BIGINT, code TEXT, lender TEXT, lender_type TEXT, contract_no TEXT, drawdown_no TEXT, limit_id BIGINT,
+        term TEXT, limit_amount BIGINT, amount BIGINT, start_date TEXT, maturity_date TEXT, rate {REAL}, rate_type TEXT,
+        interest_day {REAL}, repay_method TEXT, new_maturity TEXT, new_rate {REAL}, effective_date TEXT, collateral TEXT,
+        owner_company_id BIGINT, collateral_value BIGINT, insurance_expiry TEXT, period TEXT, bank_balance BIGINT,
+        description TEXT, doc_no TEXT, note TEXT, prev_json TEXT)""",
+    f"""CREATE TABLE IF NOT EXISTS loans (id {PK}, code TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, company_id BIGINT NOT NULL REFERENCES companies(id),
+        lender TEXT, lender_type TEXT, contract_no TEXT, drawdown_no TEXT, limit_id BIGINT, term TEXT, amount BIGINT, start_date TEXT,
+        maturity_date TEXT, rate {REAL}, rate_type TEXT, interest_day {REAL}, repay_method TEXT, collateral TEXT, purpose TEXT,
+        source_doc_id BIGINT, created_at TEXT)""",
+    f"""CREATE TABLE IF NOT EXISTS loan_collaterals (id {PK}, loan_id BIGINT NOT NULL, description TEXT, owner_company_id BIGINT,
+        value BIGINT, insurance_expiry TEXT, source_doc_id BIGINT)""",
+    f"""CREATE TABLE IF NOT EXISTS loan_recons (id {PK}, loan_id BIGINT NOT NULL, period TEXT, book_balance BIGINT, bank_balance BIGINT,
+        diff BIGINT, source_doc_id BIGINT, note TEXT)""",
     f"""CREATE TABLE IF NOT EXISTS doc_events (id {PK}, module TEXT NOT NULL, doc_id BIGINT NOT NULL, action TEXT NOT NULL,
         user_id BIGINT, user_name TEXT, note TEXT, at TEXT)""",
     f"""CREATE TABLE IF NOT EXISTS doc_approvals (id {PK}, module TEXT NOT NULL, doc_id BIGINT NOT NULL, step TEXT NOT NULL,
@@ -187,7 +201,7 @@ SCHEMA = [
     "CREATE INDEX IF NOT EXISTS ix_le_doc ON ledger_entries(module, doc_id)",
     "CREATE INDEX IF NOT EXISTS ix_ev_doc ON doc_events(module, doc_id)",
 ] + [f"CREATE INDEX IF NOT EXISTS ix_{t}_st ON {t}(status, company_id, doc_date)"
-     for t in ('doc_cashbook', 'doc_partner_payment', 'doc_payroll', 'doc_cash_fund')]
+     for t in ('doc_cashbook', 'doc_partner_payment', 'doc_payroll', 'doc_cash_fund', 'doc_loan')]
 
 
 def startup_lock(db):
@@ -196,7 +210,7 @@ def startup_lock(db):
         db.execute('SELECT pg_advisory_xact_lock(7710001)')
 
 
-DOC_TABLES = ('doc_cashbook', 'doc_partner_payment', 'doc_payroll', 'doc_cash_fund')
+DOC_TABLES = ('doc_cashbook', 'doc_partner_payment', 'doc_payroll', 'doc_cash_fund', 'doc_loan')
 # Cột bổ sung cho CSDL đã tạo từ phiên bản trước (tự thêm khi khởi động)
 MIGRATIONS = ([(t, 'dir_by', 'BIGINT') for t in DOC_TABLES] + [(t, 'dir_at', 'TEXT') for t in DOC_TABLES]
               # v2 – luồng duyệt theo mô hình kế toán mới
@@ -204,7 +218,9 @@ MIGRATIONS = ([(t, 'dir_by', 'BIGINT') for t in DOC_TABLES] + [(t, 'dir_at', 'TE
               + [(t, 'audited_by', 'BIGINT') for t in DOC_TABLES] + [(t, 'audited_at', 'TEXT') for t in DOC_TABLES]
               + [(t, 'audit_note', 'TEXT') for t in DOC_TABLES]
               + [('doc_cashbook', 'special_type', 'TEXT'), ('doc_partner_payment', 'special_type', 'TEXT'),
-                 ('company_groups', 'threshold_n', 'BIGINT')])
+                 ('company_groups', 'threshold_n', 'BIGINT'),
+                 # v3 – phân hệ Khoản vay
+                 ('doc_cashbook', 'loan_id', 'BIGINT'), ('doc_cashbook', 'repay_all', 'INTEGER')])
 
 
 def _columns(db, table):

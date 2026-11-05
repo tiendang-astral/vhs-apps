@@ -1,4 +1,5 @@
-"""Khởi tạo: tạo tài khoản Admin và (tuỳ chọn) nạp dữ liệu từ sổ quỹ Excel cũ khi CSDL còn trống."""
+"""Khởi tạo khi CSDL còn trống: tài khoản Quản trị, cơ cấu tập đoàn (nhóm, công ty, ngân hàng, hạng mục).
+Dữ liệu mẫu cũ (tài khoản NH / quỹ, 441 giao dịch Excel) chỉ nạp khi SEED_LEGACY=1 – mặc định không nạp."""
 import json
 from pathlib import Path
 
@@ -21,9 +22,13 @@ def ensure_admin(db):
     return db.scalar("SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1")
 
 
-def seed_legacy(db, admin_id):
-    data = json.loads((Path(__file__).parent / 'legacy_data.json').read_text(encoding='utf-8'))
-    ts = now_iso()
+def _data():
+    return json.loads((Path(__file__).parent / 'legacy_data.json').read_text(encoding='utf-8'))
+
+
+def seed_structure(db, admin_id):
+    """Cơ cấu tập đoàn – không phải dữ liệu mẫu."""
+    data, ts = _data(), now_iso()
     base = dict(locked=1, created_by=admin_id, created_at=ts)
     gid = {}
     for code, name, field in data['groups']:
@@ -35,6 +40,16 @@ def seed_legacy(db, admin_id):
     for code, name, note in data['banks']:
         if code != 'TM':
             bid[code] = db.insert('banks', dict(code=code, name=name, note=note or None, **base))
+    for name, nature, desc in data['cats'] + [['Điều chuyển nội bộ', 'Nội bộ', 'Chuyển tiền giữa các TK trong tập đoàn']]:
+        db.insert('categories', dict(name=name, nature=NATURE[nature], note=desc or None, **base))
+
+
+def seed_legacy(db, admin_id):
+    """Dữ liệu mẫu cũ từ file Excel – chỉ dùng chạy thử."""
+    data, ts = _data(), now_iso()
+    base = dict(locked=1, created_by=admin_id, created_at=ts)
+    cid = {r['code']: r['id'] for r in db.all('SELECT id, code FROM companies')}
+    bid = {r['code']: r['id'] for r in db.all('SELECT id, code FROM banks')}
     for a in data['accounts']:
         if a['cur'] != 'VND':
             continue
@@ -43,8 +58,6 @@ def seed_legacy(db, admin_id):
                                    bank_id=None if cash else bid[a['bank']], number=a['accno'] or None, branch=a['branch'] or None,
                                    opening_balance=int(a['ob'] or 0), opening_date='2026-04-01', status=STATUS[a['status']],
                                    note=a['note'] or None, **base))
-    for name, nature, desc in data['cats'] + [['Điều chuyển nội bộ', 'Nội bộ', 'Chuyển tiền giữa các TK trong tập đoàn']]:
-        db.insert('categories', dict(name=name, nature=NATURE[nature], note=desc or None, **base))
     # giao dịch cũ → chứng từ Thu Chi & Vay nợ đã duyệt
     m, ctx = REGISTRY['cashbook'], Ctx(db)
     acc = {r['code']: r for r in db.all('SELECT id, code, company_id FROM accounts')}
@@ -68,5 +81,7 @@ def run():
     with get_db() as db:
         startup_lock(db)
         admin_id = ensure_admin(db)
-        if settings.SEED_LEGACY and db.scalar('SELECT COUNT(*) FROM companies') == 0:
-            seed_legacy(db, admin_id)
+        if db.scalar('SELECT COUNT(*) FROM companies') == 0:
+            seed_structure(db, admin_id)
+            if settings.SEED_LEGACY:
+                seed_legacy(db, admin_id)
