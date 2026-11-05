@@ -4,23 +4,22 @@
 |---|---|---|---|
 | `hub/` | Trang tổng | 10079 | 10079 |
 | `vhs-soquy/` | Sổ quỹ | 10080 | 10082 |
-| `vhs-loans/` | Khoản vay | 10081 | 10081 |
 | `vhs-task/` | Daily Work tasks (erp.erpunicore.vn) | 10083 | 10083 |
 
 ---
 
-## 1. Chạy tất cả (hub + soquy + loans + vhs-task)
+## 1. Chạy tất cả (hub + soquy + vhs-task)
 
 Chạy từ thư mục gốc repo.
 
 ### Dev
-Cần có: `env/hub/.env.dev`, `env/vhs-soquy/.env.dev`, `env/vhs-loans/.env.dev`, `env/vhs-task/.env.dev`.
+Cần có: `env/hub/.env.dev`, `env/vhs-soquy/.env.dev`, `env/vhs-task/.env.dev`.
 1. `./scripts/up.sh`
 2. Mở http://localhost:10079
 3. Tắt: `./scripts/down.sh`
 
 ### Prod
-Cần có: `env/hub/.env`, `env/vhs-soquy/.env`, `env/vhs-loans/.env`, `env/vhs-task/.env`.
+Cần có: `env/hub/.env`, `env/vhs-soquy/.env`, `env/vhs-task/.env`.
 1. `./scripts/deploy.sh`
 2. Tắt: `./scripts/down.sh`, hoặc `./scripts/deploy.sh down`
 
@@ -60,25 +59,7 @@ Nếu đích là máy hoặc thư mục khác: `HOST=root@x.x.x.x DIR=/root/abc 
 
 ---
 
-## 4. vhs-loans (Khoản vay)
-
-1. Tạo `env/vhs-loans/.env` với các biến:
-   ```
-   PORT=10081
-   ADMIN_PASSWORD=...
-   KETOAN_PASSWORD=...
-   HUB_URL=https://apps.erpunicore.vn
-   ```
-2. `./vhs-loans/scripts/deploy.sh`
-3. Tắt: `./vhs-loans/scripts/down.sh`
-
-- Nếu DB đã có sẵn: `ADMIN_PASSWORD` / `KETOAN_PASSWORD` bị bỏ qua, vì chúng chỉ dùng ở lần chạy đầu.
-- Nếu cần chép dữ liệu cũ vào: tắt app trước, rồi chạy
-  `docker run --rm -v vhs-loans-data:/dst -v /duong/dan/data:/src alpine cp -a /src/. /dst/`
-
----
-
-## 5. vhs-task (Daily Work tasks)
+## 4. vhs-task (Daily Work tasks)
 
 Web (cổng 10083) chuyển `/api`, `/uploads`, `/notificationHub` sang API, nên chỉ cần 1 domain. Cổng API 10084 chỉ mở trên 127.0.0.1.
 
@@ -95,12 +76,12 @@ Web (cổng 10083) chuyển `/api`, `/uploads`, `/notificationHub` sang API, nê
 
 ---
 
-## 6. Sao lưu & chuyển VPS
+## 5. Sao lưu & chuyển VPS
 
-Gồm 2 script. Dữ liệu cần mang theo: 3 volume (`vhs-task_uploads`, `so_quy_app_pgdata`, `vhs-loans-data`) + thư mục `env/`. Code đã có trong git. DB SQL Server nằm máy khác, không nằm trong backup.
+Gồm 2 script. Dữ liệu cần mang theo: 2 volume (`vhs-task_uploads`, `so_quy_app_pgdata`) + thư mục `env/`. Code đã có trong git. DB SQL Server nằm máy khác, không nằm trong backup.
 
-- **`./scripts/backup.sh`** (chạy ở VPS **cũ**): dừng các stack cho dữ liệu nhất quán (nhất là Postgres), nén 3 volume + thư mục `env/` thành 1 file `migrate-<thời gian>.tar.gz`, rồi bật lại stack. VPS cũ vẫn chạy tiếp sau khi backup.
-- **`./scripts/restore.sh migrate-….tar.gz`** (chạy ở VPS **mới**, trong repo đã `git clone`): bung `env/` về chỗ cũ và nạp lại 3 volume. Không tự chạy app.
+- **`./scripts/backup.sh`** (chạy ở VPS **cũ**): dừng các stack cho dữ liệu nhất quán (nhất là Postgres), nén 2 volume + thư mục `env/` thành 1 file `migrate-<thời gian>.tar.gz`, rồi bật lại stack. VPS cũ vẫn chạy tiếp sau khi backup.
+- **`./scripts/restore.sh migrate-….tar.gz`** (chạy ở VPS **mới**, trong repo đã `git clone`): bung `env/` về chỗ cũ và nạp lại 2 volume. Không tự chạy app.
 
 ### Các bước chuyển VPS
 1. VPS cũ: `./scripts/backup.sh`

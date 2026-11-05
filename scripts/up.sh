@@ -3,7 +3,7 @@
 set -e
 cd "$(dirname "$0")/.."
 
-for d in vhs-soquy vhs-loans vhs-task hub; do
+for d in vhs-soquy vhs-task hub; do
   echo "== $d"
   E="../env/$d/.env.dev"
   [ -f "env/$d/.env.dev" ] || { echo "Thiếu env/$d/.env.dev"; exit 1; }

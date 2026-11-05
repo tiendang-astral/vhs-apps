@@ -1,5 +1,5 @@
 #!/bin/sh
-# Sao lưu 3 volume + 4 file .env thành 1 archive để chuyển VPS.
+# Sao lưu 2 volume + 3 file .env thành 1 archive để chuyển VPS.
 # Chạy tại thư mục gốc repo trên VPS CŨ:  ./scripts/backup.sh
 # Script DỪNG stack trước khi nén (để snapshot nhất quán, nhất là Postgres)
 # rồi KHỞI ĐỘNG LẠI, nên VPS cũ vẫn phục vụ tiếp sau khi backup.
@@ -8,11 +8,11 @@ cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 
 # Tên volume thật trên Docker (project name = tên thư mục). Đổi nếu khác.
-VOLUMES="vhs-task_uploads so_quy_app_pgdata vhs-loans-data"
+VOLUMES="vhs-task_uploads so_quy_app_pgdata"
 # Stack có state — dừng để nén nhất quán. hub không có state nên bỏ qua.
-STACKS="vhs-task vhs-soquy vhs-loans"
+STACKS="vhs-task vhs-soquy"
 # File .env (bí mật, không nằm trong git) — tất cả nằm trong env/, gói nguyên thư mục.
-ENVS="env/vhs-task/.env env/vhs-soquy/.env env/vhs-loans/.env env/hub/.env"
+ENVS="env/vhs-task/.env env/vhs-soquy/.env env/hub/.env"
 
 STAMP=$(date +%Y%m%d-%H%M%S)
 OUT="migrate-$STAMP"
