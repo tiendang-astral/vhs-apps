@@ -37,8 +37,8 @@ rm -rf "$TMP"
 echo
 echo "XONG. .env và volume đã về chỗ. Giờ chạy từng app:"
 echo "  ./vhs-task/scripts/deploy.sh"
-echo "  (cd vhs-soquy && docker compose up -d --build)"
-echo "  (cd vhs-loans && docker compose up -d --build)"
-echo "  (cd hub       && docker compose up -d)"
+echo "  ./vhs-soquy/scripts/deploy.sh"
+echo "  ./vhs-loans/scripts/deploy.sh"
+echo "  (cd hub && docker compose --env-file ../env/hub/.env up -d)"
 echo
 echo "Nhắc: mở allowlist IP VPS mới ở máy SQL Server (103.176.179.125) cho vhs-task."

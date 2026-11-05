@@ -1,4 +1,4 @@
-# Prod: ./scripts/deploy.sh (.env)   Dev: docker compose --env-file .env.dev up -d --build
+# Prod: ./scripts/deploy.sh (../env/vhs-task/.env)   Dev: docker compose --env-file ../env/vhs-task/.env.dev up -d --build
 # Web nginx chuyển /api, /uploads, /notificationHub sang api → chỉ cần 1 domain.
 # CSDL: dùng SQL Server có sẵn (ManagementDB) — compose KHÔNG tạo DB mới.
 services:

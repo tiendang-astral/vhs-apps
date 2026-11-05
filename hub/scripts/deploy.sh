@@ -6,6 +6,7 @@ DIR=${DIR:-/root/vhs-hub}
 cd "$(dirname "$0")/.."
 
 ssh "$HOST" "mkdir -p $DIR"
-scp index.html docker-compose.yml .env "$HOST:$DIR/"
+scp index.html docker-compose.yml "$HOST:$DIR/"
+scp ../env/hub/.env "$HOST:$DIR/.env"
 # --force-recreate để luôn sinh lại apps.txt từ .env
-ssh "$HOST" "cd $DIR && docker compose up -d --force-recreate && docker compose ps"
+ssh "$HOST" "cd $DIR && ENV_FILE=.env docker compose up -d --force-recreate && docker compose ps"

@@ -1,4 +1,6 @@
-# Chạy:  cp .env.example .env  (sửa mật khẩu)  →  docker compose up -d --build
+# Chạy:  cp .env.example ../env/vhs-soquy/.env  (sửa mật khẩu)  →  ./scripts/deploy.sh
+# name cố định: lệnh docker compose quên --env-file vẫn trỏ đúng stack/volume so_quy_app_pgdata
+name: so_quy_app
 services:
   db:
     image: postgres:16-alpine

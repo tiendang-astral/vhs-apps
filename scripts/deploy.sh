@@ -1,20 +1,20 @@
 #!/bin/sh
 # Chạy hub + các app trên máy này. Tắt hết: ./scripts/down.sh
-# Mỗi thư mục dùng trực tiếp .env của nó: hub/.env, vhs-soquy/.env, vhs-loans/.env.
+# Mỗi app dùng env/<app>/.env (vd env/hub/.env, env/vhs-soquy/.env).
 set -e
 cd "$(dirname "$0")/.."
 
 for d in vhs-soquy vhs-loans vhs-task hub; do
   echo "== $d"
   if [ "$1" = down ]; then
-    (cd "$d" && docker compose down)
+    (cd "$d" && docker compose --env-file "../env/$d/.env" down)
     continue
   fi
 
-  [ -f "$d/.env" ] || { echo "Thiếu $d/.env"; exit 1; }
+  [ -f "env/$d/.env" ] || { echo "Thiếu env/$d/.env"; exit 1; }
 
   # --force-recreate cho hub để sinh lại apps.txt từ .env
-  (cd "$d" && docker compose up -d --build $([ "$d" = hub ] && echo --force-recreate))
+  (cd "$d" && ENV_FILE="../env/$d/.env" docker compose --env-file "../env/$d/.env" up -d --build $([ "$d" = hub ] && echo --force-recreate))
 done
 # Chỉ hiện container chạy từ các thư mục của project này
 docker ps --format '{{.Label "com.docker.compose.project.working_dir"}}\t{{.Names}}\t{{.Ports}}\t{{.Status}}' \

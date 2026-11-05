@@ -1,11 +1,11 @@
-# Sửa danh sách app trong .env rồi chạy: docker compose up -d
+# Sửa danh sách app trong ../env/hub/.env rồi chạy: docker compose --env-file ../env/hub/.env up -d
 services:
   hub:
     image: nginx:alpine
     restart: unless-stopped
     ports:
       - "127.0.0.1:${PORT:-10079}:80"
-    env_file: ${ENV_FILE:-.env}
+    env_file: ${ENV_FILE:-../env/hub/.env}
     volumes:
       - ./index.html:/usr/share/nginx/html/index.html:ro
     # Gom các biến APP_1, APP_2, ... (theo thứ tự số) thành apps.txt rồi chạy nginx

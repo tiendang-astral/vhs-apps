@@ -1,4 +1,5 @@
-# Bí mật — chỉ giữ file mẫu
+# Bí mật — tất cả file env nằm ở env/<app>/, chỉ giữ file mẫu
+env/
 .env
 .env.*
 !.env.example

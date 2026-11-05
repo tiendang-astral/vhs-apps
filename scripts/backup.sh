@@ -11,8 +11,8 @@ ROOT=$(pwd)
 VOLUMES="vhs-task_uploads so_quy_app_pgdata vhs-loans-data"
 # Stack có state — dừng để nén nhất quán. hub không có state nên bỏ qua.
 STACKS="vhs-task vhs-soquy vhs-loans"
-# File .env (bí mật, không nằm trong git) — giữ nguyên đường dẫn tương đối.
-ENVS="vhs-task/.env vhs-soquy/.env vhs-loans/.env hub/.env"
+# File .env (bí mật, không nằm trong git) — tất cả nằm trong env/, gói nguyên thư mục.
+ENVS="env/vhs-task/.env env/vhs-soquy/.env env/vhs-loans/.env env/hub/.env"
 
 STAMP=$(date +%Y%m%d-%H%M%S)
 OUT="migrate-$STAMP"
@@ -29,7 +29,7 @@ done
 
 # 2. Dừng stack để dữ liệu nhất quán
 echo ">> Dừng stack..."
-for s in $STACKS; do docker compose -f "$s/docker-compose.yml" stop; done
+for s in $STACKS; do docker compose -f "$s/docker-compose.yml" --env-file "env/$s/.env" stop; done
 
 # 3. Nén từng volume qua container alpine tạm
 for v in $VOLUMES; do
@@ -40,11 +40,11 @@ done
 
 # 4. Khởi động lại stack — VPS cũ chạy tiếp tới khi đổi DNS
 echo ">> Khởi động lại stack..."
-for s in $STACKS; do docker compose -f "$s/docker-compose.yml" up -d; done
+for s in $STACKS; do docker compose -f "$s/docker-compose.yml" --env-file "env/$s/.env" up -d; done
 
 # 5. Gói .env
 echo ">> Gói .env"
-tar czf "$OUT/env.tar.gz" $ENVS
+tar czf "$OUT/env.tar.gz" env
 
 # 6. Gộp thành 1 file
 tar czf "$OUT.tar.gz" "$OUT"

@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.."
 
 for d in vhs-soquy vhs-loans vhs-task hub; do
   echo "== Tắt $d"
-  (cd "$d" && docker compose down)
+  (cd "$d" && docker compose --env-file "../env/$d/.env" down)
 done
 # Chỉ hiện container chạy từ các thư mục của project này
 docker ps --format '{{.Label "com.docker.compose.project.working_dir"}}\t{{.Names}}\t{{.Ports}}\t{{.Status}}' \

@@ -3,4 +3,4 @@
 set -e
 cd "$(dirname "$0")/.."
 
-docker compose down
+docker compose --env-file ../env/vhs-task/.env down
