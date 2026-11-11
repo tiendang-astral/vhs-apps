@@ -21,12 +21,6 @@ __pycache__/
 .vscode/
 .idea/
 
-# vhs-soquy: ảnh (screenshot docs) — không đưa vào git
-vhs-soquy/**/*.png
-vhs-soquy/**/*.jpg
-vhs-soquy/**/*.jpeg
-vhs-soquy/**/*.gif
-vhs-soquy/**/*.webp
 
 # Repo git riêng (upstream vneb-vn) — không theo dõi trong monorepo
 Timori-Quan-tri-tai-chinh/

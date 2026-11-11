@@ -58,7 +58,7 @@ Hai stack gọi nhau qua mạng Docker chung `timori` (script tự tạo): `http
 2. `./Timori-ke-toan-app/scripts/deploy.sh`
 3. Kiểm tra: `curl localhost:10080/api/health` → `{"status":"ok"}`.
 4. Tắt: `scripts/down.sh` trong từng thư mục.
-5. Tài khoản dùng chung 2 app: `./scripts/setup-timori.sh [user] [mật khẩu] [họ tên] [vai trò]` (mặc định `chairman` / `123456`, vai trò Chủ tịch). Chạy lại vô hại.
+5. Tài khoản dùng chung 2 app: `./scripts/setup-timori.sh [user] [mật khẩu] [họ tên] [vai trò]` (mặc định `chairman` / `123456`, vai trò Chủ tịch). Ghi thẳng vào CSDL, không cần mật khẩu admin; tài khoản đã có thì đặt lại mật khẩu.
 
 - Kế toán chỉ mở `127.0.0.1:10085`; Nginx domain trỏ vào đó và `APP_ORIGIN` trong `env/Timori-ke-toan-app/.env` phải khớp domain.
 - Cổng 10080 bị trình duyệt chặn (ERR_UNSAFE_PORT): truy cập qua domain hoặc cổng dev 10082.

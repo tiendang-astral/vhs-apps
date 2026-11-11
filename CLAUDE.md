@@ -10,7 +10,7 @@ Monorepo nhiều app, mỗi app một compose stack; `hub/` là trang chủ. V�
 
 ## Hub ↔ App
 
-- Mỗi app có float button về hub (`HUB_URL`, trống = ẩn). Mẫu: [vhs-soquy/web/index.html](vhs-soquy/web/index.html).
+- Mỗi app có float button về hub (`HUB_URL`, trống = ẩn). Mẫu: [Timori-Quan-tri-tai-chinh/web/index.html](Timori-Quan-tri-tai-chinh/web/index.html).
 - Hub liệt kê app bằng `APP_<n>=Tên|URL|icon` trong `env/hub/.env` và `.env.dev`.
 - Thêm/đổi app → rà soát: app có float button chưa, hub có link chưa, RUNBOOK cập nhật chưa.
 
