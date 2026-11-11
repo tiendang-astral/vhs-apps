@@ -85,18 +85,36 @@ Web (cổng 10083) chuyển `/api`, `/uploads`, `/notificationHub` sang API, nê
 
 ## 5. Sao lưu & chuyển VPS
 
-Gồm 2 script. Dữ liệu cần mang theo: 3 volume (`vhs-task_uploads`, `timori_qttc_pgdata`, `timori_ketoan_data`) + thư mục `env/`. Code đã có trong git. DB SQL Server nằm máy khác, không nằm trong backup.
+| Script | Dùng khi |
+|---|---|
+| `scripts/auto-backup-timori.sh` | Sao lưu DB 2 app Timori mỗi đêm (cron), không dừng app |
+| `scripts/restore-timori.sh` | Thử khôi phục mỗi tháng, hoặc khôi phục khi mất dữ liệu |
+| `scripts/backup.sh` / `restore.sh` | Chỉ khi chuyển sang VPS mới |
 
-- **`./scripts/backup.sh`** (chạy ở VPS **cũ**): dừng các stack cho dữ liệu nhất quán (nhất là Postgres), nén các volume + thư mục `env/` thành 1 file `migrate-<thời gian>.tar.gz`, rồi bật lại stack. VPS cũ vẫn chạy tiếp sau khi backup.
-- **`./scripts/restore.sh migrate-….tar.gz`** (chạy ở VPS **mới**, trong repo đã `git clone`): bung `env/` về chỗ cũ và nạp lại các volume. Không tự chạy app.
+### Sao lưu hằng đêm — cài một lần
 
-### Các bước chuyển VPS
-1. VPS cũ: `./scripts/backup.sh`
-2. `scp migrate-….tar.gz user@VPS_MOI:/duong-dan/repo/`
-3. VPS mới: `git clone` repo + 2 repo Timori (mục 3), cài Docker, rồi `./scripts/restore.sh migrate-….tar.gz`
-4. Deploy: `./scripts/deploy.sh` (chạy tất cả app).
-5. Mở allowlist IP VPS mới ở máy SQL Server (`103.176.179.125`) cho vhs-task.
-6. Đổi DNS trỏ về IP VPS mới (làm cuối cùng để giảm gián đoạn), rồi xin lại chứng chỉ SSL.
+```sh
+apt install -y gnupg rclone
+openssl rand -base64 32 > /root/.timori-sao-luu-pass && chmod 600 /root/.timori-sao-luu-pass   # giao Chủ tịch giữ
+printf 'BACKUP_PASS_FILE=/root/.timori-sao-luu-pass\nKEEP_DAYS=30\nRCLONE_REMOTE=\n' > /etc/timori.conf && chmod 600 /etc/timori.conf
+./scripts/auto-backup-timori.sh                                  # chạy thử
+echo '0 1 * * * root /root/apps/vhs-apps/scripts/auto-backup-timori.sh >> /var/log/timori-sao-luu.log 2>&1' > /etc/cron.d/timori-sao-luu
+```
+
+Bản sao lưu nằm ở `/root/apps/sao-luu/`. Chép thêm lên Google Drive: cấu hình `rclone config` (remote `gdrive`), đặt `RCLONE_REMOTE=gdrive:TIMORI-sao-luu`.
+
+### Kiểm tra & khôi phục
+
+- Hằng ngày: `tail -3 /root/apps/sao-luu/trang-thai.txt` → phải có `OK`.
+- Mỗi tháng: `./scripts/restore-timori.sh --kiem-tra /root/apps/sao-luu/<thư mục>` (không đụng dữ liệu đang chạy).
+- Mất dữ liệu: `./scripts/restore-timori.sh /root/apps/sao-luu/<thư mục>` → gõ `KHOI PHUC`. Script tự sao lưu hiện trạng trước khi thay.
+
+### Chuyển VPS
+
+1. VPS cũ: `./scripts/backup.sh` (nén 3 volume + `env/` thành `migrate-<thời gian>.tar.gz`).
+2. `scp migrate-….tar.gz` sang VPS mới.
+3. VPS mới: clone repo + 2 repo Timori (mục 3), cài Docker, `./scripts/restore.sh migrate-….tar.gz`, rồi `./scripts/deploy.sh`.
+4. Mở allowlist IP mới ở máy SQL Server cho vhs-task; đổi DNS, xin lại SSL.
 
 ---
 
