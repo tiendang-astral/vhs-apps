@@ -1,7 +1,7 @@
 #!/bin/sh
 # Nạp archive của backup.sh vào VPS MỚI. Chạy TẠI thư mục gốc repo đã git clone:
 #   ./scripts/restore.sh migrate-XXXXXXXX-XXXXXX.tar.gz
-# Khôi phục .env + 2 volume. KHÔNG tự chạy app — chạy deploy ở bước cuối.
+# Khôi phục .env + các volume. KHÔNG tự chạy app — chạy deploy ở bước cuối.
 set -e
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
@@ -37,7 +37,8 @@ rm -rf "$TMP"
 echo
 echo "XONG. .env và volume đã về chỗ. Giờ chạy từng app:"
 echo "  ./vhs-task/scripts/deploy.sh"
-echo "  ./vhs-soquy/scripts/deploy.sh"
+echo "  ./Timori-Quan-tri-tai-chinh/scripts/deploy.sh"
+echo "  ./Timori-ke-toan-app/scripts/deploy.sh"
 echo "  (cd hub && docker compose --env-file ../env/hub/.env up -d)"
 echo
 echo "Nhắc: mở allowlist IP VPS mới ở máy SQL Server (103.176.179.125) cho vhs-task."

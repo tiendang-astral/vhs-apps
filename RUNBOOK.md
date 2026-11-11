@@ -3,23 +3,24 @@
 | Thư mục | App | Cổng prod | Cổng dev |
 |---|---|---|---|
 | `hub/` | Trang tổng | 10079 | 10079 |
-| `vhs-soquy/` | Sổ quỹ | 10080 | 10082 |
+| `Timori-Quan-tri-tai-chinh/` | FINANCE (Quản trị tài chính) | 10080 | 10082 |
+| `Timori-ke-toan-app/` | Kế toán | 10085 | 10086 |
 | `vhs-task/` | Daily Work tasks (erp.erpunicore.vn) | 10083 | 10083 |
 
 ---
 
-## 1. Chạy tất cả (hub + soquy + vhs-task)
+## 1. Chạy tất cả (hub + Timori + vhs-task)
 
 Chạy từ thư mục gốc repo.
 
 ### Dev
-Cần có: `env/hub/.env.dev`, `env/vhs-soquy/.env.dev`, `env/vhs-task/.env.dev`.
+Cần có: `env/hub/.env.dev`, `env/Timori-Quan-tri-tai-chinh/.env.dev`, `env/Timori-ke-toan-app/.env.dev`, `env/vhs-task/.env.dev`.
 1. `./scripts/up.sh`
 2. Mở http://localhost:10079
 3. Tắt: `./scripts/down.sh`
 
 ### Prod
-Cần có: `env/hub/.env`, `env/vhs-soquy/.env`, `env/vhs-task/.env`.
+Cần có: `env/hub/.env`, `env/Timori-Quan-tri-tai-chinh/.env`, `env/Timori-ke-toan-app/.env`, `env/vhs-task/.env`.
 1. `./scripts/deploy.sh`
 2. Tắt: `./scripts/down.sh`, hoặc `./scripts/deploy.sh down`
 
@@ -46,16 +47,22 @@ Nếu đích là máy hoặc thư mục khác: `HOST=root@x.x.x.x DIR=/root/abc 
 
 ---
 
-## 3. vhs-soquy (Sổ quỹ)
+## 3. Timori: Quản trị tài chính (FINANCE) + Kế toán
 
-1. `cd vhs-soquy && cp .env.example ../env/vhs-soquy/.env`
-2. Trong `env/vhs-soquy/.env`, sửa `POSTGRES_PASSWORD`, `SECRET_KEY`, `ADMIN_PASSWORD`, `APP_PORT=10080`.
-3. `./scripts/deploy.sh`
-4. Kiểm tra: `curl localhost:10080/api/health` phải trả về `{"status":"ok"}`.
-5. Tắt: `./scripts/down.sh`
+Hai repo riêng (đã gitignore trong monorepo), clone vào đúng thư mục:
+`git clone git@github.com:vneb-vn/Timori-Quan-tri-tai-chinh.git` và `git clone git@github.com:vneb-vn/Timori-ke-toan-app.git` ở gốc repo.
 
-- Nếu cổng `APP_PORT` đang bị chiếm: `deploy.sh` sẽ xoá container và kill tiến trình đang giữ cổng đó.
-- Nếu mở cổng 10080 bằng trình duyệt: trình duyệt chặn cổng này (ERR_UNSAFE_PORT), nên phải truy cập qua domain hoặc dùng cổng dev 10082.
+Hai stack gọi nhau qua mạng Docker chung `timori` (script tự tạo): `http://qttc:8000` ↔ `http://ketoan:8770`. `INTEGRATION_KEY` (QTTC) phải bằng `FIN_KEY` (kế toán).
+
+1. `./Timori-Quan-tri-tai-chinh/scripts/deploy.sh`. **Lần đầu** script tự chép dữ liệu FINANCE cũ từ volume `so_quy_app_pgdata` (vhs-soquy) sang `timori_qttc_pgdata`; CSDL đích đã có dữ liệu thì bỏ qua. Volume cũ giữ nguyên để rollback.
+2. `./Timori-ke-toan-app/scripts/deploy.sh`
+3. Kiểm tra: `curl localhost:10080/api/health` → `{"status":"ok"}`.
+4. Tắt: `scripts/down.sh` trong từng thư mục.
+5. Tài khoản dùng chung 2 app: `./scripts/setup-timori.sh [user] [mật khẩu] [họ tên] [vai trò]` (mặc định `chairman` / `123456`, vai trò Chủ tịch). Chạy lại vô hại.
+
+- Kế toán chỉ mở `127.0.0.1:10085`; Nginx domain trỏ vào đó và `APP_ORIGIN` trong `env/Timori-ke-toan-app/.env` phải khớp domain.
+- Cổng 10080 bị trình duyệt chặn (ERR_UNSAFE_PORT): truy cập qua domain hoặc cổng dev 10082.
+- vhs-soquy đã ngừng dùng, chỉ còn là nguồn dữ liệu cho lần migrate đầu.
 
 ---
 
@@ -78,16 +85,16 @@ Web (cổng 10083) chuyển `/api`, `/uploads`, `/notificationHub` sang API, nê
 
 ## 5. Sao lưu & chuyển VPS
 
-Gồm 2 script. Dữ liệu cần mang theo: 2 volume (`vhs-task_uploads`, `so_quy_app_pgdata`) + thư mục `env/`. Code đã có trong git. DB SQL Server nằm máy khác, không nằm trong backup.
+Gồm 2 script. Dữ liệu cần mang theo: 3 volume (`vhs-task_uploads`, `timori_qttc_pgdata`, `timori_ketoan_data`) + thư mục `env/`. Code đã có trong git. DB SQL Server nằm máy khác, không nằm trong backup.
 
-- **`./scripts/backup.sh`** (chạy ở VPS **cũ**): dừng các stack cho dữ liệu nhất quán (nhất là Postgres), nén 2 volume + thư mục `env/` thành 1 file `migrate-<thời gian>.tar.gz`, rồi bật lại stack. VPS cũ vẫn chạy tiếp sau khi backup.
-- **`./scripts/restore.sh migrate-….tar.gz`** (chạy ở VPS **mới**, trong repo đã `git clone`): bung `env/` về chỗ cũ và nạp lại 2 volume. Không tự chạy app.
+- **`./scripts/backup.sh`** (chạy ở VPS **cũ**): dừng các stack cho dữ liệu nhất quán (nhất là Postgres), nén các volume + thư mục `env/` thành 1 file `migrate-<thời gian>.tar.gz`, rồi bật lại stack. VPS cũ vẫn chạy tiếp sau khi backup.
+- **`./scripts/restore.sh migrate-….tar.gz`** (chạy ở VPS **mới**, trong repo đã `git clone`): bung `env/` về chỗ cũ và nạp lại các volume. Không tự chạy app.
 
 ### Các bước chuyển VPS
 1. VPS cũ: `./scripts/backup.sh`
 2. `scp migrate-….tar.gz user@VPS_MOI:/duong-dan/repo/`
-3. VPS mới: `git clone` repo, cài Docker, rồi `./scripts/restore.sh migrate-….tar.gz`
-4. Deploy: `./scripts/deploy.sh` (chạy cả 4 app).
+3. VPS mới: `git clone` repo + 2 repo Timori (mục 3), cài Docker, rồi `./scripts/restore.sh migrate-….tar.gz`
+4. Deploy: `./scripts/deploy.sh` (chạy tất cả app).
 5. Mở allowlist IP VPS mới ở máy SQL Server (`103.176.179.125`) cho vhs-task.
 6. Đổi DNS trỏ về IP VPS mới (làm cuối cùng để giảm gián đoạn), rồi xin lại chứng chỉ SSL.
 

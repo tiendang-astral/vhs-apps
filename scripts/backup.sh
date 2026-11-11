@@ -1,5 +1,5 @@
 #!/bin/sh
-# Sao lưu 2 volume + 3 file .env thành 1 archive để chuyển VPS.
+# Sao lưu các volume + file .env thành 1 archive để chuyển VPS.
 # Chạy tại thư mục gốc repo trên VPS CŨ:  ./scripts/backup.sh
 # Script DỪNG stack trước khi nén (để snapshot nhất quán, nhất là Postgres)
 # rồi KHỞI ĐỘNG LẠI, nên VPS cũ vẫn phục vụ tiếp sau khi backup.
@@ -7,12 +7,12 @@ set -e
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 
-# Tên volume thật trên Docker (project name = tên thư mục). Đổi nếu khác.
-VOLUMES="vhs-task_uploads so_quy_app_pgdata"
+# Tên volume thật trên Docker (xem docker volume ls). Đổi nếu khác.
+VOLUMES="vhs-task_uploads timori_qttc_pgdata timori_ketoan_data"
 # Stack có state — dừng để nén nhất quán. hub không có state nên bỏ qua.
-STACKS="vhs-task vhs-soquy"
+STACKS="vhs-task Timori-Quan-tri-tai-chinh Timori-ke-toan-app"
 # File .env (bí mật, không nằm trong git) — tất cả nằm trong env/, gói nguyên thư mục.
-ENVS="env/vhs-task/.env env/vhs-soquy/.env env/hub/.env"
+ENVS="env/vhs-task/.env env/Timori-Quan-tri-tai-chinh/.env env/Timori-ke-toan-app/.env env/hub/.env"
 
 STAMP=$(date +%Y%m%d-%H%M%S)
 OUT="migrate-$STAMP"
@@ -29,7 +29,7 @@ done
 
 # 2. Dừng stack để dữ liệu nhất quán
 echo ">> Dừng stack..."
-for s in $STACKS; do docker compose -f "$s/docker-compose.yml" --env-file "env/$s/.env" stop; done
+for s in $STACKS; do (cd "$s" && docker compose --env-file "../env/$s/.env" stop); done
 
 # 3. Nén từng volume qua container alpine tạm
 for v in $VOLUMES; do
@@ -40,7 +40,7 @@ done
 
 # 4. Khởi động lại stack — VPS cũ chạy tiếp tới khi đổi DNS
 echo ">> Khởi động lại stack..."
-for s in $STACKS; do docker compose -f "$s/docker-compose.yml" --env-file "env/$s/.env" up -d; done
+for s in $STACKS; do (cd "$s" && docker compose --env-file "../env/$s/.env" up -d); done
 
 # 5. Gói .env
 echo ">> Gói .env"
