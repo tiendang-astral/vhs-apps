@@ -44,8 +44,8 @@ bao "Kế toán: $(du -h "$D/ketoan.sqlite.gz" | cut -f1), đã kiểm tra toàn
 
 # 3. Thông tin kèm theo
 { echo "thoi_gian=$T"
-  echo "qttc_code=$(git -C "$ROOT/Timori-Quan-tri-tai-chinh" rev-parse --short HEAD 2>/dev/null || echo ?)"
-  echo "ketoan_code=$(git -C "$ROOT/Timori-ke-toan-app" rev-parse --short HEAD 2>/dev/null || echo ?)"; } > "$D/thong-tin.txt"
+  echo "qttc_code=$(git -c safe.directory="*" -C "$ROOT/Timori-Quan-tri-tai-chinh" rev-parse --short HEAD 2>/dev/null || echo ?)"
+  echo "ketoan_code=$(git -c safe.directory="*" -C "$ROOT/Timori-ke-toan-app" rev-parse --short HEAD 2>/dev/null || echo ?)"; } > "$D/thong-tin.txt"
 (cd "$D" && sha256sum qttc.dump ketoan.sqlite.gz > sha256.txt)
 
 # 4. Mã hoá (nếu có tệp mật khẩu)

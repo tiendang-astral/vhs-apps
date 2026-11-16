@@ -31,6 +31,6 @@ docker ps --format '{{.Label "com.docker.compose.project.working_dir"}}\t{{.Name
 [ "$1" = down ] || {
   printf '\n%-28s %s\n' "Src" "Commit"
   for s in .:hub Timori-Quan-tri-tai-chinh:Timori-Quan-tri-tai-chinh Timori-ke-toan-app:Timori-ke-toan-app; do
-    printf '%-28s %s\n' "${s#*:}" "$(git -C "${s%%:*}" log -1 --format='%h %cd' --date=format:'%d/%m %H:%M' 2>/dev/null || echo '?')"
+    printf '%-28s %s\n' "${s#*:}" "$(git -c safe.directory="*" -C "${s%%:*}" log -1 --format='%h %cd' --date=format:'%d/%m %H:%M' 2>/dev/null || echo '?')"
   done
 }
