@@ -26,3 +26,11 @@ done
 # Chỉ hiện container chạy từ các thư mục của project này
 docker ps --format '{{.Label "com.docker.compose.project.working_dir"}}\t{{.Names}}\t{{.Ports}}\t{{.Status}}' \
   | grep "^$PWD/" | cut -f2- || echo "(không có container nào đang chạy)"
+
+# Commit đang chạy sau deploy
+[ "$1" = down ] || {
+  printf '\n%-28s %s\n' "Src" "Commit"
+  for s in .:hub Timori-Quan-tri-tai-chinh:Timori-Quan-tri-tai-chinh Timori-ke-toan-app:Timori-ke-toan-app; do
+    printf '%-28s %s\n' "${s#*:}" "$(git -C "${s%%:*}" log -1 --format='%h %cd' --date=format:'%d/%m %H:%M' 2>/dev/null || echo '?')"
+  done
+}
