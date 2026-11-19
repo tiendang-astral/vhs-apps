@@ -54,12 +54,13 @@ Hai repo riêng (đã gitignore trong monorepo), clone vào đúng thư mục:
 
 Hai stack gọi nhau qua mạng Docker chung `timori` (script tự tạo): `http://qttc:8000` ↔ `http://ketoan:8770`. `INTEGRATION_KEY` (QTTC) phải bằng `FIN_KEY` (kế toán).
 
-1. `./Timori-Quan-tri-tai-chinh/scripts/deploy.sh`. **Lần đầu** script tự chép dữ liệu FINANCE cũ từ volume `so_quy_app_pgdata` (vhs-soquy) sang `timori_qttc_pgdata`; CSDL đích đã có dữ liệu thì bỏ qua. Volume cũ giữ nguyên để rollback.
-2. `./Timori-ke-toan-app/scripts/deploy.sh`
+1. `./Timori-ke-toan-app/scripts/deploy.sh` — **luôn cài kế toán trước**, Quản trị tài chính sau (yêu cầu của Timori).
+2. `./Timori-Quan-tri-tai-chinh/scripts/deploy.sh`. **Lần đầu** script tự chép dữ liệu FINANCE cũ từ volume `so_quy_app_pgdata` (vhs-soquy) sang `timori_qttc_pgdata`; CSDL đích đã có dữ liệu thì bỏ qua. Volume cũ giữ nguyên để rollback.
 3. Kiểm tra: `curl localhost:10080/api/health` → `{"status":"ok"}`.
 4. Tắt: `scripts/down.sh` trong từng thư mục.
 5. Tài khoản dùng chung 2 app: `./scripts/setup-timori.sh [user] [mật khẩu] [họ tên] [vai trò]` (mặc định `chairman` / `123456`, vai trò Chủ tịch). Ghi thẳng vào CSDL, không cần mật khẩu admin; tài khoản đã có thì đặt lại mật khẩu.
 
+- Máy chủ phải ra được Internet tới `hoadondientu.gdt.gov.vn:443` (kế toán quét hóa đơn cổng thuế, từ bản 0.20). Kiểm tra: mục 6 bước 5.
 - Kế toán chỉ mở `127.0.0.1:10085`; Nginx domain trỏ vào đó và `APP_ORIGIN` trong `env/Timori-ke-toan-app/.env` phải khớp domain.
 - Cổng 10080 bị trình duyệt chặn (ERR_UNSAFE_PORT): truy cập qua domain hoặc cổng dev 10082.
 - vhs-soquy đã ngừng dùng, chỉ còn là nguồn dữ liệu cho lần migrate đầu.
@@ -115,6 +116,60 @@ Bản sao lưu nằm ở `/root/apps/sao-luu/`. Chép thêm lên Google Drive: c
 2. `scp migrate-….tar.gz` sang VPS mới.
 3. VPS mới: clone repo + 2 repo Timori (mục 3), cài Docker, `./scripts/restore.sh migrate-….tar.gz`, rồi `./scripts/deploy.sh`.
 4. Mở allowlist IP mới ở máy SQL Server cho vhs-task; đổi DNS, xin lại SSL.
+
+---
+
+## 6. Deploy bản mới lên VPS
+
+Chạy ở gốc repo trên máy local. Trước đó: push vhs-app, `git pull` 2 repo Timori.
+
+```sh
+VPS=root@103.176.179.125; D=/root/apps/vhs-apps
+
+# 1. Gửi env (ghi đè bản trên VPS)
+rsync -az env/ $VPS:$D/env/ && ssh $VPS "chmod -R go-rwx $D/env"
+
+# 2. Cập nhật vhs-app
+ssh $VPS "cd $D && git pull"
+
+# 3. Gửi code 2 app Timori
+rsync -az --delete --exclude data/ --exclude __pycache__/ --exclude node_modules/ \
+  Timori-Quan-tri-tai-chinh Timori-ke-toan-app $VPS:$D/
+
+# 4. Sao lưu rồi deploy
+ssh $VPS "cd $D && ./scripts/auto-backup-timori.sh && ./scripts/deploy.sh"
+
+# 5. Kiểm tra → {"status":"ok"} và {"needsSetup":false,...}
+ssh $VPS "curl -s localhost:10080/api/health; echo; curl -s localhost:10085/api/bootstrap"
+# Kế toán ra được cổng thuế → 200
+ssh $VPS "docker exec timori_ketoan_app node -e \"fetch('https://hoadondientu.gdt.gov.vn/api/captcha',{headers:{'User-Agent':'Mozilla/5.0'}}).then(r=>console.log(r.status)).catch(e=>console.log('LOI',e.cause?.code||e.message))\""
+```
+
+- Chỉ cập nhật Timori: ở bước 4 thay `./scripts/deploy.sh` bằng `./Timori-ke-toan-app/scripts/deploy.sh && ./Timori-Quan-tri-tai-chinh/scripts/deploy.sh`.
+- Chưa cài sao lưu (mục 5): bỏ `./scripts/auto-backup-timori.sh &&`.
+
+---
+
+## 7. Bản mới bị lỗi → quay về bản cũ
+
+Chạy trên VPS, tại `/root/apps/vhs-apps`.
+
+```sh
+# 1. Lấy commit cũ từ bản sao lưu ở bước 4 mục 6
+B=/root/apps/sao-luu/$(ls -t /root/apps/sao-luu | grep ^20 | head -1); cat $B/thong-tin.txt
+
+# 2. Code về bản cũ, deploy lại (dữ liệu giữ nguyên)
+git -c safe.directory="*" -C Timori-Quan-tri-tai-chinh checkout -f <qttc_code>
+git -c safe.directory="*" -C Timori-ke-toan-app checkout -f <ketoan_code>
+./Timori-ke-toan-app/scripts/deploy.sh && ./Timori-Quan-tri-tai-chinh/scripts/deploy.sh
+
+# 3. Chỉ khi dữ liệu hỏng: khôi phục dữ liệu (mất nhập liệu từ lúc deploy)
+./scripts/restore-timori.sh $B
+```
+
+- Bước 1 lấy bản mới nhất; nếu cron đêm đã chạy sau deploy thì chọn bản ngay trước giờ deploy.
+- Thường chỉ cần bước 2: bản mới chỉ thêm bảng/cột, code cũ vẫn chạy.
+- Deploy lần sau (mục 6) tự ghi đè về bản mới nhất.
 
 ---
 

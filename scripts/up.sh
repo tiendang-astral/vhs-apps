@@ -7,7 +7,8 @@ export SHOW_HUB_BUTTON=true
 # Mạng Docker chung để Quản trị tài chính ↔ Kế toán gọi nhau (http://qttc:8000, http://ketoan:8770)
 docker network inspect timori >/dev/null 2>&1 || docker network create timori
 
-for d in Timori-Quan-tri-tai-chinh Timori-ke-toan-app vhs-task hub; do
+# Kế toán trước, Quản trị tài chính sau (yêu cầu của Timori: QTTC đọc dữ liệu mới từ kế toán)
+for d in Timori-ke-toan-app Timori-Quan-tri-tai-chinh vhs-task hub; do
   echo "== $d"
   E="../env/$d/.env.dev"
   [ -f "env/$d/.env.dev" ] || { echo "Thiếu env/$d/.env.dev"; exit 1; }
